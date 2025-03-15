@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+    --card: 0 0% 3%;
+    --card-foreground: 0 0% 100%;
+    --popover: 0 0% 3%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 43 89% 38%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 13%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 13%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 120 100% 50%;
+    --accent-foreground: 0 0% 0%;
+    --destructive: 0 100% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 20%;
+    --input: 0 0% 13%;
+    --ring: 43 89% 38%;
+    --radius: 0.25rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+.terminal-card {
+  @apply border border-border bg-card rounded-sm;
+}
+
+.status-good {
+  @apply bg-accent/10 text-accent border border-accent/30 rounded-sm px-4 py-2 font-mono;
+}
+
+.status-warning {
+  @apply bg-primary/10 text-primary border border-primary/30 rounded-sm px-4 py-2 font-mono;
+}
+
+.status-bad {
+  @apply bg-destructive/10 text-destructive border border-destructive/30 rounded-sm px-4 py-2 font-mono;
+}
+
+.data-table {
+  @apply w-full text-sm;
+}
+
+.data-table th {
+  @apply text-left py-2 px-3 border-b border-border text-muted-foreground;
+}
+
+.data-table td {
+  @apply py-2 px-3 border-b border-border;
+}
+
+.data-row {
+  @apply flex justify-between py-1.5 border-b border-border text-sm;
+}
+
+.data-label {
+  @apply text-muted-foreground;
+}
+
