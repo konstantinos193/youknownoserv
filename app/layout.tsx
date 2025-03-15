@@ -27,7 +27,7 @@ export const metadata = {
     card: 'summary_large_image',
     title: 'Odinsmash',
     description: 'Odinsmash Token Analyzer',
-    images: ['https://i.postimg.cc/ZRXgrvGX/Untitled-design-42.png'],
+    images: [''],
   },
 }
 
@@ -41,18 +41,18 @@ export default function RootLayout({
       <Head>
         <link rel="icon" href="/favicon.ico" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <link rel="canonical" href="https://inception.wtf" />
+        <link rel="canonical" href="f" />
         <meta name="robots" content="index, follow" />
         <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://inception.wtf" />
+        <meta property="og:url" content="" />
         <meta property="og:title" content="Odinsmash" />
-        <meta property="og:description" content="Where Dreams Become Digital Reality" />
-        <meta property="og:image" content="https://i.postimg.cc/ZRXgrvGX/Untitled-design-42.png" />
+        <meta property="og:description" content="Odinsmash Token Analyzer" />
+        <meta property="og:image" content="" />
         <meta property="og:site_name" content="Odinsmash" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="Odinsmash" />
-        <meta name="twitter:description" content="Where Dreams Become Digital Reality" />
-        <meta name="twitter:image" content="https://i.postimg.cc/ZRXgrvGX/Untitled-design-42.png" />
+        <meta name="twitter:description" content="Odinsmash Token Analyzer" />
+        <meta name="twitter:image" content="" />
       </Head>
       <html lang="en">
         <body className={`${inter.className} dream-bg`}>
