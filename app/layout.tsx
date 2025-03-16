@@ -2,6 +2,8 @@ import "./globals.css"
 import { Inter } from "next/font/google"
 import type React from "react"
 import Head from 'next/head'
+import Background from "@/components/background"
+
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -41,6 +43,8 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  console.log("LAYOUT RENDERING")
+  
   return (
     <>
       <Head>
@@ -62,14 +66,15 @@ export default function RootLayout({
         <meta name="twitter:image" content="https://i.postimg.cc/zBqJ9HdB/ODINSMASH.png" />
       </Head>
       <html lang="en">
-        <body className={`${inter.className} dream-bg`}>
-          {children}
+        <body style={{ backgroundColor: '#000000' }}>
+          <Background />
+          <div style={{ backgroundColor: '#000000' }}>
+            {children}
+          </div>
         </body>
       </html>
     </>
   )
 }
-
-
 
 import './globals.css'

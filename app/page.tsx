@@ -139,8 +139,8 @@ export default async function Home() {
   const recentTokens = await getRecentTokens()
 
   return (
-    <div className="min-h-screen bg-background font-mono">
-      <header className="border-b border-border">
+    <div className="min-h-screen font-mono flex flex-col relative" style={{ backgroundColor: '#000000' }}>
+      <header className="border-b border-border" style={{ backgroundColor: '#000000' }}>
         <div className="container flex h-14 items-center justify-between px-2 sm:px-4">
           <div className="flex items-center gap-2 sm:gap-6">
             <Link href="/" className="flex items-center gap-2 text-base sm:text-lg font-semibold">
@@ -164,7 +164,7 @@ export default async function Home() {
           </div>
         </div>
       </header>
-      <main className="container px-2 sm:px-4 py-4 sm:py-8">
+      <main className="container px-2 sm:px-4 py-4 sm:py-8 flex-1" style={{ backgroundColor: '#000000' }}>
         <div className="max-w-2xl mx-auto space-y-4 sm:space-y-8">
           <div className="space-y-1 sm:space-y-2">
             <h1 className="text-xl sm:text-2xl font-semibold">Token Analysis</h1>
@@ -172,7 +172,7 @@ export default async function Home() {
               Enter an Odin.fun token URL to analyze its risk profile
             </p>
           </div>
-          <div className="terminal-card p-3 sm:p-6 space-y-4 sm:space-y-6">
+          <div className="terminal-card p-3 sm:p-6 space-y-4 sm:space-y-6 backdrop-blur-sm bg-card/80">
             <form 
               action="/results" 
               method="get"
@@ -245,6 +245,20 @@ export default async function Home() {
           </div>
         </div>
       </main>
+      <div className="fixed bottom-4 right-4 z-10">
+        <div className="bg-card/80 backdrop-blur-sm border border-border rounded-lg p-3 shadow-lg w-[360px]">
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Support ODINSMASH ❤️ - Help keep our tools running
+            </p>
+            <div className="flex items-center gap-2">
+              <code className="text-xs text-primary font-mono">
+                bc1q3p7dpmu0s3mmcfj83jf072gjdcf6sqcdf3uk52
+              </code>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
