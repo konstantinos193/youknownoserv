@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input"
 import { Search, Filter, ArrowUpDown } from "lucide-react"
 import { AnalysisHistory } from "@/components/AnalysisHistory"
 import { useState } from 'react';
+import Image from "next/image"
 
 interface TokenData {
   id: string
@@ -142,7 +143,14 @@ export default async function Home() {
       <header className="border-b border-border">
         <div className="container flex h-14 items-center justify-between px-2 sm:px-4">
           <div className="flex items-center gap-2 sm:gap-6">
-            <Link href="/" className="text-base sm:text-lg font-semibold">
+            <Link href="/" className="flex items-center gap-2 text-base sm:text-lg font-semibold">
+              <Image 
+                src="/Logo.png"
+                alt="Odinsmash Logo"
+                width={24}
+                height={24}
+                className="w-6 h-6"
+              />
               ODINSMASH
             </Link>
             <nav className="flex items-center space-x-2 sm:space-x-4 text-xs sm:text-sm">

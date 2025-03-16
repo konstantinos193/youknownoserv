@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation'; // Import useSearchParams from Next.js
 import Link from "next/link"; // Ensure this is only declared once
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ExternalLink, Globe, Twitter, Send } from "lucide-react";
+import { ArrowLeft, ExternalLink, Globe, X, Send } from "lucide-react";
 import { formatSupply } from '../../utils/formatSupply';
 import { Market } from '@/types/market';
 
@@ -611,7 +611,12 @@ const Header = () => (
   <header className="border-b border-border">
     <div className="container flex h-14 items-center px-4">
       <div className="flex items-center gap-6">
-        <Link href="/" className="text-lg font-semibold">
+        <Link href="/" className="flex items-center gap-2 text-lg font-semibold">
+          <img 
+            src="/Logo.png" 
+            alt="ODINSMASH Logo" 
+            className="h-6 w-6"
+          />
           ODINSMASH
         </Link>
         <nav className="flex items-center space-x-4 text-sm">
@@ -647,10 +652,22 @@ const SocialLinks = ({ twitter, website, telegram }: { twitter?: string, website
         <Link 
           href={twitter}
           target="_blank"
-          className="text-muted-foreground hover:text-primary transition-colors"
-          title="Twitter"
+          className="text-muted-foreground hover:text-primary transition-colors group"
+          title="X (formerly Twitter)"
         >
-          <Twitter className="h-4 w-4" />
+          <svg 
+            width="16" 
+            height="16" 
+            viewBox="0 0 1200 1227" 
+            fill="none" 
+            xmlns="http://www.w3.org/2000/svg"
+            className="transition-colors group-hover:text-primary"
+          >
+            <path 
+              d="M714.163 519.284L1160.89 0H1055.03L667.137 450.887L357.328 0H0L468.492 681.821L0 1226.37H105.866L515.491 750.218L842.672 1226.37H1200L714.137 519.284H714.163ZM569.165 687.828L521.697 619.934L144.011 79.6944H306.615L611.412 515.685L658.88 583.579L1055.08 1150.3H892.476L569.165 687.854V687.828Z" 
+              fill="currentColor"
+            />
+          </svg>
         </Link>
       )}
       {telegram && (
