@@ -732,15 +732,15 @@ export default function TokensPage() {
               <Link href="/" className="bg-primary hover:bg-primary/90">
                 Analyze Token
               </Link>
-          </Button>
+            </Button>
 
             {/* Risk Filter Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="gap-2 flex-1 sm:flex-none">
-                <Filter className="h-4 w-4" />
+                  <Filter className="h-4 w-4" />
                   {riskFilter === 'all' ? 'All Risks' : `${riskFilter.charAt(0).toUpperCase() + riskFilter.slice(1)} Risk`}
-              </Button>
+                </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
                 <DropdownMenuItem onClick={() => setRiskFilter('all')}>All Risks</DropdownMenuItem>
@@ -755,9 +755,9 @@ export default function TokensPage() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="gap-2 flex-1 sm:flex-none">
-                <ArrowUpDown className="h-4 w-4" />
+                  <ArrowUpDown className="h-4 w-4" />
                   Sort
-              </Button>
+                </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
                 <DropdownMenuItem onClick={() => setSortBy('newest')}>Newest First</DropdownMenuItem>
@@ -768,8 +768,8 @@ export default function TokensPage() {
                 <DropdownMenuItem onClick={() => setSortBy('holders_low')}>Least Holders</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            </div>
           </div>
+        </div>
 
         {/* Search bar */}
         <div className="flex gap-2">
@@ -795,48 +795,63 @@ export default function TokensPage() {
               const risk = await calculateRiskLevel(token);
               
               return (
-                        <Link
-                key={token.id}
-                href={`/results?search=${token.id}`}
-                className="block p-3 sm:p-4 bg-card hover:bg-card/80 rounded-lg border border-border"
-              >
-                <div className="flex items-center gap-3">
-                  <img 
-                    src={`https://images.odin.fun/token/${token.id}`}
-                    alt={token.name}
-                    className="w-12 h-12 rounded-lg object-cover"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center flex-wrap gap-2">
-                      <h2 className="font-medium">
-                        {token.name} ({token.ticker})
-                      </h2>
-                      <span className={`text-xs px-2 py-0.5 rounded ${risk.color}`}>
-                        {risk.level}
+                <Link
+                  key={token.id}
+                  href={`/results?search=${token.id}`}
+                  className="block p-3 sm:p-4 bg-card hover:bg-card/80 rounded-lg border border-border"
+                >
+                  <div className="flex items-center gap-3">
+                    <img 
+                      src={`https://images.odin.fun/token/${token.id}`}
+                      alt={token.name}
+                      className="w-12 h-12 rounded-lg object-cover"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center flex-wrap gap-2">
+                        <h2 className="font-medium">
+                          {token.name} ({token.ticker})
+                        </h2>
+                        <span className={`text-xs px-2 py-0.5 rounded ${risk.color}`}>
+                          {risk.level}
                         </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {risk.warning}
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {risk.warning}
-                    </p>
+                    <div className="text-right">
+                      <p className="font-medium">
+                        {formatPrice(token.price || 0)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {token.holder_count} holders
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-medium">
-                      {formatPrice(token.price || 0)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {token.holder_count} holders
-                    </p>
-            </div>
-          </div>
-              </Link>
-            );
+                </Link>
+              );
             })
           ) : (
             <div className="text-center py-8">No tokens found</div>
           )}
+        </div>
+      </div>
+
+      {/* Donation message */}
+      <div className="fixed bottom-4 right-4 z-10">
+        <div className="bg-card/80 backdrop-blur-sm border border-border rounded-lg p-3 shadow-lg w-[360px]">
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Support ODINSMASH ❤️ - Help keep our tools running
+            </p>
+            <div className="flex items-center gap-2">
+              <code className="text-xs text-primary font-mono">
+                bc1q3p7dpmu0s3mmcfj83jf072gjdcf6sqcdf3uk52
+              </code>
+            </div>
           </div>
         </div>
+      </div>
     </div>
   );
 }
-

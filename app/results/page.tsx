@@ -685,12 +685,12 @@ const SocialLinks = ({ twitter, website, telegram }: { twitter?: string, website
 };
 
 export default function ResultsPage() {
-  const searchParams = useSearchParams(); // Use the hook to get search parameters
-  const searchUrl = searchParams.get('search'); // Get the search parameter
-  const tokenId = searchUrl ? searchUrl.split('/').pop() : ''; // Extract the token ID from the URL
+  const searchParams = useSearchParams();
+  const searchUrl = searchParams.get('search');
+  const tokenId = searchUrl ? searchUrl.split('/').pop() : '';
 
   // State to hold token data
-  const [tokenData, setTokenData] = useState<any>(null); // Change to hold a single token
+  const [tokenData, setTokenData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [markets, setMarkets] = useState<Market[]>([]);
@@ -918,21 +918,10 @@ export default function ResultsPage() {
     );
   }
 
-  if (error) {
-    return <div>Error: {error}</div>;
-  }
+  if (error) return <div>Error: {error}</div>;
+  if (!tokenData) return <div>No token data available.</div>;
 
-  // Check if tokenData is null before rendering
-  if (!tokenData) {
-    return <div>No token data available.</div>;
-  }
-
-  // Construct the image URL
   const imageUrl = `https://images.odin.fun/token/${tokenId}`;
-
-  // Log the raw total_supply for debugging
-  console.log('Raw total_supply:', tokenData.total_supply);
-  console.log('Calling formatSupply with:', tokenData.total_supply, 18);
 
   return (
     <div className="min-h-screen bg-background font-mono">
@@ -1151,6 +1140,20 @@ export default function ResultsPage() {
           </div>
         </div>
       </main>
+      <div className="fixed bottom-4 right-4 z-10">
+        <div className="bg-card/80 backdrop-blur-sm border border-border rounded-lg p-3 shadow-lg w-[360px]">
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Support ODINSMASH ❤️ - Help keep our tools running
+            </p>
+            <div className="flex items-center gap-2">
+              <code className="text-xs text-primary font-mono">
+                bc1q3p7dpmu0s3mmcfj83jf072gjdcf6sqcdf3uk52
+              </code>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
