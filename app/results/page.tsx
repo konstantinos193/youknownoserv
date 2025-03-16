@@ -279,9 +279,86 @@ const analyzeDevTrading = async (creatorId: string, tokenId: string) => {
   }
 };
 
-// Update calculateOverallRisk function
-const calculateOverallRisk = async (holders: any[], totalSupply: string, creatorId: string, totalHolders: number, tokenId: string) => {
+// Update the calculate24hVolumeSpike function
+const calculate24hVolumeSpike = async (tokenId: string) => {
+  try {
+    // Fetch trades for the last 7 days
+    const response = await fetchWithRetry(
+      `https://api.odin.fun/v1/token/${tokenId}/trades?page=1&limit=9999`
+    );
+    const data = await response.json();
+    const trades = data.data || [];
+
+    const now = new Date();
+    const last24h = new Date(now.getTime() - (24 * 60 * 60 * 1000));
+    const last7d = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
+
+    // Calculate 24h volume - FIXED: divide by 1e11 instead of 1e8
+    const trades24h = trades.filter(tx => new Date(tx.time) > last24h);
+    const volume24h = trades24h.reduce((sum, tx) => sum + (Number(tx.amount_btc) / 1e11), 0);
+
+    // Calculate previous 6 days volume (excluding last 24h)
+    const trades7d = trades.filter(tx => {
+      const txTime = new Date(tx.time);
+      return txTime > last7d && txTime <= last24h;
+    });
+
+    // Calculate average daily volume from previous 6 days - FIXED: divide by 1e11
+    const volume7d = trades7d.reduce((sum, tx) => sum + (Number(tx.amount_btc) / 1e11), 0);
+    const averageDailyVolume = volume7d / 6;
+
+    // Calculate buy/sell volume for 24h - FIXED: divide by 1e11
+    const buyVolume24h = trades24h
+      .filter(tx => tx.buy)
+      .reduce((sum, tx) => sum + (Number(tx.amount_btc) / 1e11), 0);
+    
+    const sellVolume24h = trades24h
+      .filter(tx => !tx.buy)
+      .reduce((sum, tx) => sum + (Number(tx.amount_btc) / 1e11), 0);
+
+    // Calculate metrics
+    const spikeRatio = averageDailyVolume > 0 ? volume24h / averageDailyVolume : 1;
+    const volumeChange = averageDailyVolume > 0 
+      ? ((volume24h - averageDailyVolume) / averageDailyVolume * 100)
+      : 0;
+
+    return {
+      spikeRatio,
+      volume24h,
+      averageDailyVolume,
+      volumeChange: volumeChange.toFixed(2),
+      tradeCount24h: trades24h.length,
+      buyVolume24h,
+      sellVolume24h,
+      buySellRatio: buyVolume24h / (sellVolume24h || 1)
+    };
+  } catch (error) {
+    console.error('Error calculating volume spike:', error);
+    return {
+      spikeRatio: 1,
+      volume24h: 0,
+      averageDailyVolume: 0,
+      volumeChange: '0.00',
+      tradeCount24h: 0,
+      buyVolume24h: 0,
+      sellVolume24h: 0,
+      buySellRatio: 1
+    };
+  }
+};
+
+// Update the calculateOverallRisk function
+const calculateOverallRisk = async (holders: any[], totalSupply: string, creatorId: string, totalHolders: number, tokenId: string, tokenData: any) => {
   const dangers = [];
+  
+  // Add volume spike analysis
+  const volumeMetrics = await calculate24hVolumeSpike(tokenId);
+  if (volumeMetrics.spikeRatio > 3) {
+    dangers.push({
+      warning: "Unusual Volume Activity",
+      message: `24h volume is ${volumeMetrics.spikeRatio.toFixed(1)}x higher than 7-day average`
+    });
+  }
   
   if (!TRUSTED_DEVELOPERS.includes(creatorId)) {
     // Check for multiple tokens
@@ -399,11 +476,19 @@ const calculateOverallRisk = async (holders: any[], totalSupply: string, creator
       message: "Multiple high risk factors detected. Exercise extreme caution.",
       color: "text-red-500",
       warning: "DANGER: Multiple risk factors",
-      dangers: dangers
+      dangers: dangers,
+      volumeMetrics
     };
   }
 
-  return riskLevel;
+  // Update the return object to include volume metrics
+  const riskAssessment = {
+    ...riskLevel,
+    volumeMetrics,
+    dangers
+  };
+
+  return riskAssessment;
 };
 
 // Add this loading skeleton for the risk analysis section
@@ -434,7 +519,15 @@ const RiskAnalysisSkeleton = () => (
 );
 
 // Update the AsyncRiskAnalysis component
-const AsyncRiskAnalysis = ({ holders, totalSupply, creatorId, totalHolders, tokenId }) => {
+const AsyncRiskAnalysis = ({ 
+  holders, 
+  totalSupply, 
+  creatorId, 
+  totalHolders, 
+  tokenId, 
+  onRiskUpdate,
+  tokenData
+}) => {
   const [risk, setRisk] = useState(null);
 
   // Calculate percentages
@@ -456,12 +549,14 @@ const AsyncRiskAnalysis = ({ holders, totalSupply, creatorId, totalHolders, toke
         totalSupply,
         creatorId,
         totalHolders,
-        tokenId
+        tokenId,
+        tokenData
       );
       
       // Only update if data has changed
       if (JSON.stringify(riskData) !== JSON.stringify(risk)) {
         setRisk(riskData);
+        onRiskUpdate(riskData); // Call the callback with new risk data
       }
     };
 
@@ -471,7 +566,7 @@ const AsyncRiskAnalysis = ({ holders, totalSupply, creatorId, totalHolders, toke
     // Silent real-time updates
     const interval = setInterval(updateRiskAnalysis, 5000);
     return () => clearInterval(interval);
-  }, [holders, totalSupply, creatorId, totalHolders, tokenId]);
+  }, [holders, totalSupply, creatorId, totalHolders, tokenId, tokenData]);
 
   if (!risk) return null;
 
@@ -486,16 +581,8 @@ const AsyncRiskAnalysis = ({ holders, totalSupply, creatorId, totalHolders, toke
       <p className="text-sm text-gray-400 mb-4">
         {risk.message}
       </p>
-      {risk.dangers && (
-        <div className="mt-2 space-y-2">
-          {risk.dangers.map((danger, index) => (
-            <div key={index} className="text-red-500">
-              <div className="font-medium">DANGER: {danger.warning}</div>
-              <div className="text-sm text-gray-400">{danger.message}</div>
-            </div>
-          ))}
-        </div>
-      )}
+
+      {/* Existing holder metrics */}
       <div className="mt-4 text-sm text-gray-400 space-y-1">
         <p>• Developer holds {devPercentage.toFixed(2)}% of supply</p>
         <p>• Top 5 holders control {top5Percentage.toFixed(2)}% of supply</p>
@@ -505,106 +592,58 @@ const AsyncRiskAnalysis = ({ holders, totalSupply, creatorId, totalHolders, toke
   );
 };
 
-// Add these loading skeleton components near the top of the file
-const LoadingHeader = () => (
-  <div className="mb-6 flex items-center gap-3 animate-pulse">
-    <div className="h-[60px] w-[60px] lg:h-[110px] lg:w-[110px] bg-gray-700/50 rounded-lg" />
-    <div className="flex flex-col gap-2">
-      <div className="h-6 w-48 bg-gray-700/50 rounded" />
-      <div className="h-4 w-96 bg-gray-700/50 rounded" />
-    </div>
-  </div>
-);
+// First, add the BTCPrice interface at the top with other interfaces
+interface BTCPrice {
+  USD: number;
+  time: number;
+}
 
-const LoadingRiskAnalysis = () => (
-  <div className="terminal-card p-4">
-    <div className="h-5 w-32 bg-gray-700/50 rounded mb-4" />
-    <div className="space-y-4">
-      <div className="h-7 w-40 bg-gray-700/50 rounded" />
-      <div className="h-5 w-64 bg-gray-700/50 rounded" />
-      <div className="h-4 w-full bg-gray-700/50 rounded" />
-      <div className="space-y-2">
-        <div className="h-4 w-48 bg-gray-700/50 rounded" />
-        <div className="h-4 w-56 bg-gray-700/50 rounded" />
-        <div className="h-4 w-52 bg-gray-700/50 rounded" />
+// Then update the VolumeAnalysis component
+const VolumeAnalysis = ({ volumeMetrics, btcUsdPrice }: { volumeMetrics: any, btcUsdPrice: number }) => {
+  if (!volumeMetrics || !btcUsdPrice) return null;
+
+  // Convert BTC volumes to USD
+  const volume24hUSD = volumeMetrics.volume24h * btcUsdPrice;
+  const avgDailyVolumeUSD = volumeMetrics.averageDailyVolume * btcUsdPrice;
+  const buyVolumeUSD = volumeMetrics.buyVolume24h * btcUsdPrice;
+  const sellVolumeUSD = volumeMetrics.sellVolume24h * btcUsdPrice;
+
+  return (
+    <div className="terminal-card p-4">
+      <h2 className="mb-4 text-sm font-medium">Volume Analysis</h2>
+      <div className="space-y-2 text-sm">
+        <div className="data-row">
+          <span className="data-label">24h Volume</span>
+          <span>{formatUSDValue(volume24hUSD)}</span>
+        </div>
+        <div className="data-row">
+          <span className="data-label">Avg Daily Volume</span>
+          <span>{formatUSDValue(avgDailyVolumeUSD)}</span>
+        </div>
+        <div className="data-row">
+          <span className="data-label">24h Trades</span>
+          <span>{volumeMetrics.tradeCount24h}</span>
+        </div>
+        <div className="data-row">
+          <span className="data-label">Buy Volume</span>
+          <span>{formatUSDValue(buyVolumeUSD)}</span>
+        </div>
+        <div className="data-row">
+          <span className="data-label">Sell Volume</span>
+          <span>{formatUSDValue(sellVolumeUSD)}</span>
+        </div>
+        <div className="data-row">
+          <span className="data-label">Buy/Sell Ratio</span>
+          <span>{volumeMetrics.buySellRatio.toFixed(2)}</span>
+        </div>
+        <div className="data-row">
+          <span className="data-label">Volume Trend</span>
+          <span>{volumeMetrics.spikeRatio.toFixed(2)}x average</span>
+        </div>
       </div>
     </div>
-  </div>
-);
-
-const LoadingTokenOverview = () => (
-  <div className="terminal-card p-4">
-    <div className="h-5 w-32 bg-gray-700/50 rounded mb-4" />
-    <div className="space-y-3">
-      {[1, 2, 3, 4, 5, 6].map((i) => (
-        <div key={i} className="flex justify-between">
-          <div className="h-4 w-20 bg-gray-700/50 rounded" />
-          <div className="h-4 w-32 bg-gray-700/50 rounded" />
-        </div>
-      ))}
-    </div>
-  </div>
-);
-
-const LoadingMarkets = () => (
-  <div className="terminal-card p-4">
-    <div className="h-5 w-32 bg-gray-700/50 rounded mb-4" />
-    <div className="overflow-x-auto">
-      <table className="w-full">
-        <thead>
-          <tr>
-            {['Market', 'Pair', 'Liquidity', 'LP'].map((header) => (
-              <th key={header} className="text-left p-2">
-                <div className="h-4 w-20 bg-gray-700/50 rounded" />
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {[1, 2, 3].map((i) => (
-            <tr key={i}>
-              {[1, 2, 3, 4].map((j) => (
-                <td key={j} className="p-2">
-                  <div className="h-4 w-24 bg-gray-700/50 rounded" />
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  </div>
-);
-
-const LoadingHolders = () => (
-  <div className="terminal-card p-4">
-    <div className="h-5 w-32 bg-gray-700/50 rounded mb-4" />
-    <div className="overflow-x-auto">
-      <table className="w-full">
-        <thead>
-          <tr>
-            {['Holder', 'Amount', 'Percentage'].map((header) => (
-              <th key={header} className="text-left p-2">
-                <div className="h-4 w-20 bg-gray-700/50 rounded" />
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {[1, 2, 3, 4, 5].map((i) => (
-            <tr key={i}>
-              {[1, 2, 3].map((j) => (
-                <td key={j} className="p-2">
-                  <div className="h-4 w-24 bg-gray-700/50 rounded" />
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  </div>
-);
+  );
+};
 
 // Update the header section in both the loading state and main render
 const Header = () => (
@@ -684,12 +723,224 @@ const SocialLinks = ({ twitter, website, telegram }: { twitter?: string, website
   );
 };
 
+// Update the LoadingHeader component
+const LoadingHeader = () => (
+  <div className="mb-6 flex items-center gap-3">
+    {/* Token image skeleton */}
+    <div className="h-[60px] w-[60px] lg:h-[110px] lg:w-[110px] bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded-lg" />
+    
+    <div className="flex flex-col gap-2 flex-1">
+      {/* Token name skeleton */}
+      <div className="flex items-center gap-2">
+        <div className="h-6 w-32 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+      </div>
+      {/* Description skeleton - multiple lines */}
+      <div className="space-y-2">
+        <div className="h-4 w-full bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+        <div className="h-4 w-3/4 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+      </div>
+      {/* Social links skeleton */}
+      <div className="flex items-center gap-3 mt-2">
+        <div className="h-4 w-4 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded-full" />
+        <div className="h-4 w-4 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded-full" />
+        <div className="h-4 w-4 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded-full" />
+      </div>
+    </div>
+  </div>
+);
+
+// Update the LoadingRiskAnalysis component
+const LoadingRiskAnalysis = () => (
+  <div className="terminal-card p-4">
+    <h2 className="mb-4 text-sm font-medium">Risk Analysis</h2>
+    <div className="space-y-4">
+      {/* Risk level skeleton */}
+      <div className="h-7 w-40 bg-gradient-to-r from-red-700/50 to-red-600/50 animate-pulse rounded" />
+      {/* Warning message skeleton */}
+      <div className="h-5 w-64 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+      {/* Description skeleton */}
+      <div className="h-4 w-full bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+      {/* Stats skeleton */}
+      <div className="space-y-2 mt-4">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="flex items-center justify-between">
+            <div className="h-4 w-32 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+            <div className="h-4 w-16 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
+// Update the LoadingTokenOverview component
+const LoadingTokenOverview = () => (
+  <div className="terminal-card p-4">
+    <h2 className="mb-4 text-sm font-medium">Token Overview</h2>
+    <div className="space-y-3">
+      {/* Token info skeleton */}
+      {['Price', 'Supply', 'Creator', 'Market Cap', 'Holders', 'LP'].map((label, i) => (
+        <div key={i} className="flex justify-between items-center">
+          <span className="text-sm text-muted-foreground">{label}</span>
+          <div className="h-4 w-32 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+        </div>
+      ))}
+      {/* Trade button skeleton */}
+      <div className="pt-4 border-t border-border">
+        <div className="h-9 w-full bg-gradient-to-r from-primary/50 to-primary/30 animate-pulse rounded" />
+      </div>
+    </div>
+  </div>
+);
+
+// Update the LoadingMarkets component
+const LoadingMarkets = () => (
+  <div className="terminal-card p-4 md:col-span-2">
+    <h2 className="mb-4 text-sm font-medium">Markets</h2>
+    <div className="overflow-x-auto">
+      <table className="w-full">
+        <thead>
+          <tr>
+            {['Market', 'Pair', 'Liquidity', 'LP'].map((header) => (
+              <th key={header} className="text-left p-2">{header}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {[1, 2, 3].map((i) => (
+            <tr key={i}>
+              <td className="p-2">
+                <div className="flex items-center gap-2">
+                  <div className="h-4 w-4 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+                  <div className="h-4 w-20 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+                </div>
+              </td>
+              <td className="p-2">
+                <div className="h-4 w-24 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+              </td>
+              <td className="p-2">
+                <div className="h-4 w-28 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+              </td>
+              <td className="p-2">
+                <div className="h-4 w-16 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+);
+
+// Update the LoadingHolders component
+const LoadingHolders = () => (
+  <div className="terminal-card p-4 md:col-span-2">
+    <h2 className="mb-4 text-sm font-medium">Top Holders</h2>
+    <div className="overflow-x-auto">
+      <table className="w-full">
+        <thead>
+          <tr>
+            {['Holder', 'Amount', 'Percentage'].map((header) => (
+              <th key={header} className="text-left p-2">{header}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {[1, 2, 3, 4, 5].map((i) => (
+            <tr key={i}>
+              <td className="p-2">
+                <div className="h-4 w-32 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+              </td>
+              <td className="p-2">
+                <div className="h-4 w-24 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+              </td>
+              <td className="p-2">
+                <div className="h-4 w-16 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+);
+
+// Add new interface for holder analysis
+interface HolderAnalysis {
+  newHolderGrowthRate: number;
+  top10AccumulationTrend: number;
+  holderCount: number;
+  whaleActivity: {
+    accumulation: number;
+    distribution: number;
+  };
+}
+
+const TOTAL_SUPPLY = 21_000_000; // Add this constant at the top with other constants
+
+const calculateHolderAnalysis = async (tokenId: string, holders: any[]): Promise<HolderAnalysis> => {
+  try {
+    console.log('Starting holder analysis calculation for:', tokenId);
+    console.log('Current holders:', holders.length);
+
+    if (!holders || holders.length === 0) {
+      throw new Error('No holders data');
+    }
+
+    // Use constant total supply instead of trying to get it from holders
+    const totalSupply = TOTAL_SUPPLY;
+    console.log('Using total supply:', totalSupply);
+
+    // Calculate top 10 holdings
+    const top10Holdings = holders
+      .slice(0, 10)
+      .reduce((sum, h) => sum + Number(h.balance) / 1e11, 0); // Divide by 1e11 to get actual balance
+    
+    console.log('Top 10 holdings:', top10Holdings);
+    
+    // Calculate whale metrics (holders with >1% supply)
+    const whaleThreshold = totalSupply * 0.01;
+    const whales = holders.filter(h => (Number(h.balance) / 1e11) >= whaleThreshold);
+    
+    // Calculate accumulation/distribution
+    const whaleAccumulation = whales.length;
+    const whaleDistribution = 0; // We can't determine distribution without historical data
+
+    // Calculate top 10 accumulation trend
+    const top10Percentage = (top10Holdings / totalSupply) * 100;
+    
+    const analysis = {
+      newHolderGrowthRate: 0,
+      top10AccumulationTrend: Number.isFinite(top10Percentage) ? top10Percentage : 0,
+      holderCount: holders.length,
+      whaleActivity: {
+        accumulation: whaleAccumulation,
+        distribution: whaleDistribution
+      }
+    };
+
+    console.log('Final holder analysis:', analysis);
+    return analysis;
+
+  } catch (error) {
+    console.error('Error in calculateHolderAnalysis:', error);
+    return {
+      newHolderGrowthRate: 0,
+      top10AccumulationTrend: 0,
+      holderCount: holders.length || 0,
+      whaleActivity: {
+        accumulation: 0,
+        distribution: 0
+      }
+    };
+  }
+};
+
 export default function ResultsPage() {
   const searchParams = useSearchParams();
   const searchUrl = searchParams.get('search');
   const tokenId = searchUrl ? searchUrl.split('/').pop() : '';
 
-  // State to hold token data
   const [tokenData, setTokenData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -707,19 +958,9 @@ export default function ResultsPage() {
     usdPrice: string;
   } | null>(null);
   const [cachedHolders, setCachedHolders] = useState<any[]>([]);
-
-  const fetchTokenData = async () => {
-    try {
-      const response = await fetchWithRetry(`/api/tokenWebhook?tokenId=${tokenId}`);
-      const data = await response.json();
-      setTokenData(data[tokenId]);
-    } catch (err) {
-      console.error('Fetch error:', err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [riskAnalysis, setRiskAnalysis] = useState(null);
+  const [btcUsdPrice, setBtcUsdPrice] = useState(0);
+  const [holderAnalysis, setHolderAnalysis] = useState<HolderAnalysis | null>(null);
 
   const fetchMarkets = async () => {
     try {
@@ -764,23 +1005,52 @@ export default function ResultsPage() {
 
   const fetchHolders = async () => {
     try {
+      console.log('Starting to fetch holders for token:', tokenId);
+      let allHolders = [];
+      let currentPage = 1;
+      const limit = 20;
+      let hasMorePages = true;
+
       // Try to get from cache first
       if (cachedHolders.length > 0) {
+        console.log('Using cached holders:', cachedHolders.length);
         setHolders(cachedHolders);
       }
 
-      const response = await fetchWithRetry(`https://api.odin.fun/v1/token/${tokenId}/owners`);
-      const data = await response.json();
-      const newHolders = data.data || [];
-      
+      // Fetch all pages
+      while (hasMorePages) {
+        console.log(`Fetching holders page ${currentPage}`);
+        const response = await fetchWithRetry(
+          `https://api.odin.fun/v1/token/${tokenId}/owners?page=${currentPage}&limit=${limit}`
+        );
+        const data = await response.json();
+        
+        if (!data.data || data.data.length === 0) {
+          hasMorePages = false;
+          break;
+        }
+
+        allHolders = [...allHolders, ...data.data];
+        
+        // Check if we've reached the last page
+        if (data.data.length < limit || allHolders.length >= data.count) {
+          hasMorePages = false;
+        } else {
+          currentPage++;
+        }
+      }
+
+      console.log(`Total holders fetched: ${allHolders.length}`);
+
       // Only update if we got new data
-      if (newHolders.length > 0) {
-        setHolders(newHolders);
-        setCachedHolders(newHolders); // Cache the successful response
+      if (allHolders.length > 0) {
+        setHolders(allHolders);
+        setCachedHolders(allHolders); // Cache the successful response
       } else if (cachedHolders.length === 0) {
         // If no cached data and no new data, try direct API call
+        console.log('Attempting direct API call');
         const directResponse = await fetch(
-          `https://api.odin.fun/v1/token/${tokenId}/owners`,
+          `https://api.odin.fun/v1/token/${tokenId}/owners?page=1&limit=100`,
           { 
             headers: {
               ...API_HEADERS,
@@ -803,6 +1073,7 @@ export default function ResultsPage() {
       console.error('Error fetching holders:', error);
       // Use cached data if available
       if (cachedHolders.length > 0) {
+        console.log('Using cached holders after error');
         setHolders(cachedHolders);
       }
     }
@@ -849,57 +1120,141 @@ export default function ResultsPage() {
     }
   };
 
+  const fetchBTCPrice = async () => {
+    try {
+      const response = await fetch('https://mempool.space/api/v1/prices');
+      const data = await response.json();
+      setBtcUsdPrice(data.USD);
+    } catch (error) {
+      console.error('Error fetching BTC price:', error);
+    }
+  };
+
+  // Update the fetchTokenData function
+  const fetchTokenData = async () => {
+    try {
+      console.log('Fetching token data for:', tokenId);
+      const response = await fetchWithRetry(`https://api.odin.fun/v1/token/${tokenId}`);
+      const data = await response.json();
+      console.log('Token data response:', data);
+      setTokenData(data);
+      
+      // Fetch creator username when we get token data
+      if (data?.creator) {
+        await fetchCreatorUsername(data.creator);
+      }
+      
+      setLoading(false);
+    } catch (err) {
+      console.error('Fetch error:', err);
+      setError(err.message);
+      setLoading(false);
+    }
+  };
+
+  // Update the useEffect to include all required functions
   useEffect(() => {
     const fetchData = async () => {
       try {
-        await Promise.all([
-          fetchTokenData().catch(console.error),
-          fetchMarkets().catch(console.error),
-          fetchHolders().catch(console.error),
-          fetchPrice().catch(console.error)
-        ]);
-
-        // Add this part to save analysis history
-        if (tokenData && holders.length > 0) {
-          const riskAnalysis = await calculateOverallRisk(
-            holders,
-            tokenData.total_supply,
-            tokenData.creator,
-            tokenData.holder_count,
-            tokenId
-          );
-
-          const analysis = {
-            id: tokenId,
-            name: tokenData.name,
-            ticker: tokenData.ticker,
-            timestamp: Date.now(),
-            riskLevel: riskAnalysis.level,
-            warnings: riskAnalysis.dangers?.length || 0
-          };
-
-          // Save just the last analysis
-          localStorage.setItem('lastAnalysis', JSON.stringify(analysis));
-
-          // Trigger storage event
-          window.dispatchEvent(new Event('storage'));
+        if (!tokenId) {
+          setError('No token ID provided');
+          setLoading(false);
+          return;
         }
+
+        // First fetch token data
+        await fetchTokenData();
+        
+        // Then fetch holders
+        await fetchHolders();
+        
+        // Other fetches can happen in parallel
+        await Promise.all([
+          fetchMarkets(),
+          fetchPrice(),
+          fetchBTCPrice()
+        ]);
       } catch (error) {
         console.error('Error in fetchData:', error);
+        setLoading(false);
       }
     };
 
     fetchData();
-    const interval = setInterval(fetchData, 5000);
+  }, [tokenId]); // tokenId is now properly in scope
 
-    return () => clearInterval(interval);
-  }, [tokenId]);
-
+  // Add a separate useEffect for holder analysis
   useEffect(() => {
-    if (tokenData?.creator) {
-      fetchCreatorUsername(tokenData.creator);
-    }
-  }, [tokenData?.creator]);
+    const updateAnalysis = async () => {
+      if (holders.length > 0) {
+        console.log('Calculating holder analysis with:', holders.length, 'holders');
+        const analysis = await calculateHolderAnalysis(tokenId, holders);
+        setHolderAnalysis(analysis);
+      }
+    };
+
+    updateAnalysis();
+  }, [holders, tokenId]);
+
+  // Add new component for Holder Analysis
+  const HolderAnalysisComponent = ({ holderAnalysis }: { holderAnalysis: HolderAnalysis }) => {
+    if (!holderAnalysis) return null;
+    
+    return (
+      <div className="terminal-card p-4">
+        <h2 className="mb-4 text-sm font-medium">Holder Analysis</h2>
+        <div className="space-y-2 text-sm">
+          <div className="data-row">
+            <span className="data-label">New Holder Growth</span>
+            <span>{holderAnalysis.newHolderGrowthRate.toFixed(2)}%</span>
+          </div>
+          <div className="data-row">
+            <span className="data-label">Top 10 Accumulation</span>
+            <span>{holderAnalysis.top10AccumulationTrend.toFixed(2)}%</span>
+          </div>
+          <div className="data-row">
+            <span className="data-label">Whale Distribution</span>
+            <span>
+              {holderAnalysis.whaleActivity.accumulation} Active / 
+              {holderAnalysis.whaleActivity.distribution} Inactive
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Add new component for Holder Stats
+  const HolderStats = ({ holderAnalysis }: { holderAnalysis: HolderAnalysis }) => {
+    if (!holderAnalysis) return null;
+    
+    return (
+      <div className="terminal-card p-4">
+        <h2 className="mb-4 text-sm font-medium">Holder Stats</h2>
+        <div className="space-y-2 text-sm">
+          <div className="data-row">
+            <span className="data-label">New Holders (24h)</span>
+            <span>{holderAnalysis.newHolderGrowthRate.toFixed(2)}%</span>
+          </div>
+          <div className="data-row">
+            <span className="data-label">Top 10 Accumulation</span>
+            <span>{holderAnalysis.top10AccumulationTrend.toFixed(2)}%</span>
+          </div>
+          <div className="data-row">
+            <span className="data-label">Total Holders</span>
+            <span>{holderAnalysis.holderCount}</span>
+          </div>
+          <div className="data-row">
+            <span className="data-label">Whale Activity</span>
+            <span>
+              {holderAnalysis.whaleActivity.accumulation} 🟢 / 
+              {holderAnalysis.whaleActivity.distribution} 🔴
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   if (loading) {
     return (
@@ -965,11 +1320,11 @@ export default function ResultsPage() {
                 creatorId={tokenData.creator}
                 totalHolders={tokenData.holder_count}
                 tokenId={tokenId}
+                onRiskUpdate={setRiskAnalysis}
+                tokenData={tokenData}
               />
             ) : (
-              <div className="text-gray-400">
-                LOADING
-              </div>
+              <div className="text-gray-400">LOADING</div>
             )}
           </div>
 
@@ -1029,6 +1384,28 @@ export default function ResultsPage() {
             </div>
           </div>
 
+          {/* Volume and Holder Analysis Grid */}
+          <div className="grid gap-6 md:grid-cols-2 md:col-span-2">
+            {/* Volume Analysis */}
+            {riskAnalysis?.volumeMetrics && btcUsdPrice > 0 && (
+              <VolumeAnalysis 
+                volumeMetrics={riskAnalysis.volumeMetrics} 
+                btcUsdPrice={btcUsdPrice}
+              />
+            )}
+            
+            {/* Holder Analysis */}
+            {holderAnalysis ? (
+              <HolderAnalysisComponent holderAnalysis={holderAnalysis} />
+            ) : (
+              <div className="terminal-card p-4">
+                <h2 className="mb-4 text-sm font-medium">Holder Analysis</h2>
+                <div className="text-sm text-gray-400">Loading analysis data...</div>
+              </div>
+            )}
+          </div>
+
+          {/* Markets */}
           <div className="terminal-card p-4 md:col-span-2">
             <h2 className="mb-4 text-sm font-medium">Markets</h2>
             <div className="overflow-x-auto">
@@ -1087,6 +1464,7 @@ export default function ResultsPage() {
             </div>
           </div>
 
+          {/* Top Holders */}
           <div className="terminal-card p-4 md:col-span-2">
             <h2 className="mb-4 text-sm font-medium">Top Holders</h2>
             <div className="overflow-x-auto">

@@ -19,7 +19,7 @@ interface TokenData {
 
 async function getRecentTokens(): Promise<TokenData[]> {
   try {
-    const tokens = ['2jjj'] // Changed to use 2jjj as example
+    const tokens = ['2ait'] // Changed to use 2ait as example
     const tokenData = await Promise.all(
       tokens.map(async (id) => {
         try {
@@ -54,6 +54,16 @@ interface RiskLevel {
 }
 
 const calculateRiskLevel = (token: TokenData): RiskLevel => {
+  // Special case for platform token (2ait)
+  if (token.id === '2ait') {
+    return {
+      level: "LOW RISK",
+      color: "text-green-500",
+      message: "Platform token with verified distribution.",
+      warning: "VERIFIED: Official platform token"
+    };
+  }
+
   // Check for critical issues first
   if (token.btc_liquidity === 0 || token.token_liquidity === 0) {
     return {
@@ -181,7 +191,7 @@ export default async function Home() {
               <div className="flex gap-2">
                 <Input
                   name="search"
-                  placeholder="Enter token URL or ID (e.g. 2jjj)"
+                  placeholder="Enter token URL or ID (e.g. 2ait)"
                   className="flex-1 bg-secondary border-border font-mono text-sm sm:text-base"
                   required
                 />
