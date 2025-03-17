@@ -651,7 +651,7 @@ const analyzeDevTrading = async (creatorId: string, tokenId: string) => {
   }
 };
 
-type SortOption = 'newest' | 'oldest' | 'price_high' | 'price_low' | 'holders_high' | 'holders_low';
+type SortOption = 'newest' | 'oldest' | 'price_high' | 'price_low' | 'holders_high' | 'holders_low' | 'risk_high' | 'risk_low';
 type RiskFilter = 'all' | 'low' | 'guarded' | 'elevated' | 'moderate' | 'high' | 'very_high' | 'extreme';
 
 // First, add the formatPrice function at the top of the file
@@ -900,48 +900,68 @@ export default function TokensPage() {
     const tokenIds = result.map(t => t.id);
     const holdersMap = await fetchTokenHolders(tokenIds, result[0]?.creator || '');
 
+    // Helper function to get risk level number (for sorting)
+    const getRiskLevel = (token: Token) => {
+      const holders = holdersMap[token.id]?.data || [];
+      
+      // Check for zero holders first
+      if (token.holder_count === 0) return 7; // Highest risk
+
+      const devHolder = holders.find(h => h.user === token.creator);
+      const devHoldings = devHolder ? Number(devHolder.balance) / 1e11 : 0;
+      const totalSupplyNum = Number(token.total_supply) / 1e11;
+      const devPercentage = (devHoldings / totalSupplyNum) * 100;
+
+      const sortedHolders = [...holders].sort((a, b) => Number(b.balance) - Number(a.balance));
+      const top5Holdings = sortedHolders.slice(0, 5).reduce((sum, h) => sum + Number(h.balance) / 1e11, 0);
+      const top5Percentage = (top5Holdings / totalSupplyNum) * 100;
+
+      // Return risk level number (higher = riskier)
+      if (devPercentage >= 50 || top5Percentage >= 70) return 6; // extreme
+      if (devPercentage >= 30 || top5Percentage >= 50) return 5; // very_high
+      if (devPercentage >= 20 || top5Percentage >= 40) return 4; // high
+      if (devPercentage >= 10 || top5Percentage >= 30) return 3; // moderate
+      if (devPercentage >= 5 || top5Percentage >= 20) return 2; // elevated
+      if (devPercentage >= 2 || top5Percentage >= 10) return 1; // guarded
+      return 0; // low
+    };
+
     // Filter based on risk level if not 'all'
     if (riskFilter !== 'all') {
       result = result.filter(token => {
-        // Check for rugged tokens first
-        if (token.holder_count === 0) {
-          return riskFilter === 'extreme';
-        }
-
-        const holders = holdersMap[token.id]?.data || [];
-        const devHolder = holders.find(h => h.user === token.creator);
-        const devHoldings = devHolder ? Number(devHolder.balance) / 1e11 : 0;
-        const totalSupplyNum = Number(token.total_supply) / 1e11;
-        const devPercentage = (devHoldings / totalSupplyNum) * 100;
-
-        const sortedHolders = [...holders].sort((a, b) => Number(b.balance) - Number(a.balance));
-        const top5Holdings = sortedHolders.slice(0, 5).reduce((sum, h) => sum + Number(h.balance) / 1e11, 0);
-        const top5Percentage = (top5Holdings / totalSupplyNum) * 100;
-
-        // Determine which risk level the token belongs to
+        const riskLevel = getRiskLevel(token);
         switch (riskFilter) {
-          case 'extreme':
-            return devPercentage >= 50 || top5Percentage >= 70;
-          case 'very_high':
-            return (devPercentage >= 30 && devPercentage < 50) || (top5Percentage >= 50 && top5Percentage < 70);
-          case 'high':
-            return (devPercentage >= 20 && devPercentage < 30) || (top5Percentage >= 40 && top5Percentage < 50);
-          case 'moderate':
-            return (devPercentage >= 10 && devPercentage < 20) || (top5Percentage >= 30 && top5Percentage < 40);
-          case 'elevated':
-            return (devPercentage >= 5 && devPercentage < 10) || (top5Percentage >= 20 && top5Percentage < 30);
-          case 'guarded':
-            return (devPercentage >= 2 && devPercentage < 5) || (top5Percentage >= 10 && top5Percentage < 20);
-          case 'low':
-            return devPercentage < 2 && top5Percentage < 10;
-          default:
-            return true;
+          case 'extreme': return riskLevel === 6 || riskLevel === 7;
+          case 'very_high': return riskLevel === 5;
+          case 'high': return riskLevel === 4;
+          case 'moderate': return riskLevel === 3;
+          case 'elevated': return riskLevel === 2;
+          case 'guarded': return riskLevel === 1;
+          case 'low': return riskLevel === 0;
+          default: return true;
         }
       });
     }
 
-    // Apply sorting
+    // Sort tokens by risk level first, then by the selected sort criteria
     result.sort((a, b) => {
+      // If sorting by risk level
+      if (sortBy === 'risk_high') {
+        return getRiskLevel(b) - getRiskLevel(a);
+      }
+      if (sortBy === 'risk_low') {
+        return getRiskLevel(a) - getRiskLevel(b);
+      }
+
+      // For other sort criteria, sort within the same risk level
+      const riskA = getRiskLevel(a);
+      const riskB = getRiskLevel(b);
+      
+      if (riskFilter !== 'all' && riskA !== riskB) {
+        return riskA - riskB; // Sort by risk level first
+      }
+
+      // Then apply the selected sort criteria
       switch (sortBy) {
         case 'oldest':
           return new Date(a.created_time).getTime() - new Date(b.created_time).getTime();
@@ -1088,6 +1108,8 @@ export default function TokensPage() {
                 <DropdownMenuItem onClick={() => setSortBy('price_low')}>Lowest Price</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSortBy('holders_high')}>Most Holders</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setSortBy('holders_low')}>Least Holders</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSortBy('risk_high')}>Highest Risk</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSortBy('risk_low')}>Lowest Risk</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
