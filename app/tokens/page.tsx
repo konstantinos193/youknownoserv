@@ -896,14 +896,33 @@ export default function TokensPage() {
       );
     }
 
-    // Get holders data for all tokens in a single batch
+    // Get holders data and creator tokens data for all tokens
     const tokenIds = result.map(t => t.id);
     const holdersMap = await fetchTokenHolders(tokenIds, result[0]?.creator || '');
+    
+    // Create a map to store creator tokens count
+    const creatorTokensMap = new Map();
+    
+    // Fetch creator tokens data for all unique creators
+    const uniqueCreators = [...new Set(result.map(t => t.creator))];
+    await Promise.all(uniqueCreators.map(async (creator) => {
+      if (!TRUSTED_DEVELOPERS.includes(creator)) {
+        const tokens = await fetchCreatorTokens(creator);
+        creatorTokensMap.set(creator, tokens.length);
+      }
+    }));
 
     // Helper function to determine risk level
     const getRiskLevel = (token: Token): string => {
-      // Check for zero holders first
-      if (token.holder_count === 0) return 'extreme';
+      // Check for multiple creator tokens first
+      if (!TRUSTED_DEVELOPERS.includes(token.creator) && creatorTokensMap.get(token.creator) > 1) {
+        return 'extreme';
+      }
+
+      // Check for zero holders
+      if (token.holder_count === 0) {
+        return 'extreme';
+      }
 
       const holders = holdersMap[token.id]?.data || [];
       
