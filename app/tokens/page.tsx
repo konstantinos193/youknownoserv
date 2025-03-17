@@ -722,7 +722,19 @@ const TokenCard = ({ token }: { token: Token }) => {
       try {
         setLoading(true);
         
-        // Fetch holders data
+        // Immediately return RUGGED status if holder_count is 0
+        if (token.holder_count === 0) {
+          setRisk({
+            level: "RUGGED",
+            color: "text-red-600",
+            message: "Token appears to be abandoned",
+            warning: "No holders found - Token likely rugged"
+          });
+          setLoading(false);
+          return;
+        }
+        
+        // Only fetch holders if there are holders
         const holdersData = await fetchTokenHolders(token.id, token.creator);
         const holdersArray = holdersData[token.id]?.data || [];
         setHolders(holdersArray);
@@ -732,7 +744,6 @@ const TokenCard = ({ token }: { token: Token }) => {
         setRisk(riskAssessment);
       } catch (error) {
         console.error('Error loading token data:', error);
-        // Set default risk assessment on error
         setRisk({
           level: "ERROR",
           color: "text-red-600",
