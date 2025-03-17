@@ -170,19 +170,19 @@ async function processHolderData(holders: any[], token: Token): Promise<RiskAsse
   // Special handling for tokens with 0 holders
   if (token.holder_count === 0) {
     return {
-      level: "NEW TOKEN",
-      color: "text-blue-500",
-      message: "Recently created token",
-      warning: "No holder data available yet"
+      level: "RUGGED",
+      color: "text-red-600",
+      message: "Token appears to be abandoned",
+      warning: "No holders found - Token likely rugged"
     };
   }
 
   if (!holders || holders.length === 0) {
     return {
-      level: "PENDING",
-      color: "text-yellow-500",
-      message: "Holder data unavailable",
-      warning: "Waiting for blockchain data"
+      level: "RUGGED",
+      color: "text-red-600",
+      message: "Token appears to be abandoned",
+      warning: "No holder data - Token likely rugged"
     };
   }
 
