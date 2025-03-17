@@ -896,18 +896,16 @@ export default function TokensPage() {
       );
     }
 
-      // Get holders data for all tokens in a single batch
-      const tokenIds = result.map(t => t.id);
-      const holdersMap = await fetchTokenHolders(tokenIds, result[0]?.creator || '');
+    // Get holders data for all tokens in a single batch
+    const tokenIds = result.map(t => t.id);
+    const holdersMap = await fetchTokenHolders(tokenIds, result[0]?.creator || '');
 
-    // Calculate risk levels for all tokens first
-    const tokenRiskMap = new Map();
-
-    for (const token of result) {
+    // Filter based on risk level if not 'all'
+    if (riskFilter !== 'all') {
+      result = result.filter(token => {
         // Check for rugged tokens first
         if (token.holder_count === 0) {
-        tokenRiskMap.set(token.id, 'extreme');
-        continue;
+          return riskFilter === 'extreme';
         }
 
         const holders = holdersMap[token.id]?.data || [];
@@ -920,42 +918,30 @@ export default function TokensPage() {
         const top5Holdings = sortedHolders.slice(0, 5).reduce((sum, h) => sum + Number(h.balance) / 1e11, 0);
         const top5Percentage = (top5Holdings / totalSupplyNum) * 100;
 
-      // Check for multiple tokens by creator
-      const creatorTokens = await fetchCreatorTokens(token.creator);
-      if (!TRUSTED_DEVELOPERS.includes(token.creator) && creatorTokens.length > 1) {
-        tokenRiskMap.set(token.id, 'extreme');
-        continue;
-      }
-
-      // Determine risk level
-      let riskLevel;
-      if (devPercentage >= 50 || top5Percentage >= 70) {
-        riskLevel = 'extreme';
-      } else if (devPercentage >= 30 || top5Percentage >= 50) {
-        riskLevel = 'very_high';
-      } else if (devPercentage >= 20 || top5Percentage >= 40) {
-        riskLevel = 'high';
-      } else if (devPercentage >= 10 || top5Percentage >= 30) {
-        riskLevel = 'moderate';
-      } else if (devPercentage >= 5 || top5Percentage >= 20) {
-        riskLevel = 'elevated';
-      } else if (devPercentage >= 2 || top5Percentage >= 10) {
-        riskLevel = 'guarded';
-      } else {
-        riskLevel = 'low';
-      }
-
-      tokenRiskMap.set(token.id, riskLevel);
+        // Determine which risk level the token belongs to
+        switch (riskFilter) {
+          case 'extreme':
+            return devPercentage >= 50 || top5Percentage >= 70;
+          case 'very_high':
+            return (devPercentage >= 30 && devPercentage < 50) || (top5Percentage >= 50 && top5Percentage < 70);
+          case 'high':
+            return (devPercentage >= 20 && devPercentage < 30) || (top5Percentage >= 40 && top5Percentage < 50);
+          case 'moderate':
+            return (devPercentage >= 10 && devPercentage < 20) || (top5Percentage >= 30 && top5Percentage < 40);
+          case 'elevated':
+            return (devPercentage >= 5 && devPercentage < 10) || (top5Percentage >= 20 && top5Percentage < 30);
+          case 'guarded':
+            return (devPercentage >= 2 && devPercentage < 5) || (top5Percentage >= 10 && top5Percentage < 20);
+          case 'low':
+            return devPercentage < 2 && top5Percentage < 10;
+          default:
+            return true;
+        }
+      });
     }
 
-    // Filter based on risk level if not 'all'
-    if (riskFilter !== 'all') {
-      result = result.filter(token => tokenRiskMap.get(token.id) === riskFilter);
-    }
-
-    // Apply sorting with risk level consideration
+    // Apply sorting
     result.sort((a, b) => {
-      // First sort by the selected sort method
       switch (sortBy) {
         case 'oldest':
           return new Date(a.created_time).getTime() - new Date(b.created_time).getTime();
