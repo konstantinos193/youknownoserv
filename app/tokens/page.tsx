@@ -167,8 +167,8 @@ const fetchWithRetry = async (url: string) => {
 
 // Update the processHolderData function
 async function processHolderData(holders: any[], token: Token): Promise<RiskAssessment> {
-  // Special handling for tokens with 0 holders
-  if (token.holder_count === 0) {
+  // Check for zero holders first
+  if (!token.holder_count || token.holder_count === 0) {
     return {
       level: "RUGGED",
       color: "text-red-600",
@@ -177,12 +177,13 @@ async function processHolderData(holders: any[], token: Token): Promise<RiskAsse
     };
   }
 
+  // If no holders data but holder_count > 0, show pending
   if (!holders || holders.length === 0) {
     return {
-      level: "RUGGED",
-      color: "text-red-600",
-      message: "Token appears to be abandoned",
-      warning: "No holder data - Token likely rugged"
+      level: "PENDING",
+      color: "text-yellow-500",
+      message: "Loading holder data",
+      warning: "Please wait while we analyze the token"
     };
   }
 
