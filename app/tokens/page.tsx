@@ -823,15 +823,7 @@ const fetchCreatorBalance = async (creatorId: string) => {
   }
 };
 
-export default function TokensPage() {
-  const [tokens, setTokens] = useState<Token[]>([]);
-  const [sortBy, setSortBy] = useState<SortOption>('newest');
-  const [riskFilter, setRiskFilter] = useState<RiskFilter>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [filteredTokens, setFilteredTokens] = useState<Token[]>([]);
-const filterAndSortTokens = (tokensToFilter: Token[]) => {
+const filterAndSortTokens = useCallback(async (tokensToFilter: Token[]) => {
   let result = [...tokensToFilter];
 
   // Apply search filter
@@ -842,52 +834,7 @@ const filterAndSortTokens = (tokensToFilter: Token[]) => {
     );
   }
 
-  // Apply risk filter
-  if (riskFilter !== 'all') {
-    result = result.filter(async token => {
-      try {
-        // Get holders data
-        const holdersData = await fetchTokenHolders(token.id, token.creator);
-        const holders = holdersData[token.id]?.data || [];
-        
-        // Calculate percentages
-        const devHolder = holders.find(h => h.user === token.creator);
-        const devHoldings = devHolder ? Number(devHolder.balance) / 1e11 : 0;
-        const totalSupplyNum = Number(token.total_supply) / 1e11;
-        const devPercentage = (devHoldings / totalSupplyNum) * 100;
-
-        // Sort holders by balance
-        const sortedHolders = [...holders].sort((a, b) => Number(b.balance) - Number(a.balance));
-        const top5Holdings = sortedHolders.slice(0, 5).reduce((sum, h) => sum + Number(h.balance) / 1e11, 0);
-        const top5Percentage = (top5Holdings / totalSupplyNum) * 100;
-
-        // Return based on risk filter
-        switch (riskFilter) {
-          case 'extreme':
-            return devPercentage >= 50 || top5Percentage >= 70;
-          case 'very_high':
-            return (devPercentage >= 30 && devPercentage < 50) || (top5Percentage >= 50 && top5Percentage < 70);
-          case 'high':
-            return (devPercentage >= 20 && devPercentage < 30) || (top5Percentage >= 40 && top5Percentage < 50);
-          case 'moderate':
-            return (devPercentage >= 10 && devPercentage < 20) || (top5Percentage >= 30 && top5Percentage < 40);
-          case 'elevated':
-            return (devPercentage >= 5 && devPercentage < 10) || (top5Percentage >= 20 && top5Percentage < 30);
-          case 'guarded':
-            return (devPercentage >= 2 && devPercentage < 5) || (top5Percentage >= 10 && top5Percentage < 20);
-          case 'low':
-            return devPercentage < 2 && top5Percentage < 10;
-          default:
-            return true;
-        }
-      } catch (error) {
-        console.error('Error processing token risk:', error);
-        return false;
-      }
-    });
-  }
-
-  // Apply sorting
+  // Apply sorting first
   result.sort((a, b) => {
     switch (sortBy) {
       case 'oldest':
@@ -905,10 +852,54 @@ const filterAndSortTokens = (tokensToFilter: Token[]) => {
     }
   });
 
-  return result;
-};
+  // If no risk filter, return sorted results
+  if (riskFilter === 'all') {
+    return result;
+  }
 
-// Update the component to handle async filtering
+  // Get holders data for all tokens in a single batch
+  const tokenIds = result.map(t => t.id);
+  const holdersMap = await fetchTokenHolders(tokenIds, result[0]?.creator || '');
+
+  // Filter based on risk levels
+  return result.filter(token => {
+    try {
+      const holders = holdersMap[token.id]?.data || [];
+      const devHolder = holders.find(h => h.user === token.creator);
+      const devHoldings = devHolder ? Number(devHolder.balance) / 1e11 : 0;
+      const totalSupplyNum = Number(token.total_supply) / 1e11;
+      const devPercentage = (devHoldings / totalSupplyNum) * 100;
+
+      const sortedHolders = [...holders].sort((a, b) => Number(b.balance) - Number(a.balance));
+      const top5Holdings = sortedHolders.slice(0, 5).reduce((sum, h) => sum + Number(h.balance) / 1e11, 0);
+      const top5Percentage = (top5Holdings / totalSupplyNum) * 100;
+
+      switch (riskFilter) {
+        case 'extreme':
+          return devPercentage >= 50 || top5Percentage >= 70;
+        case 'very_high':
+          return (devPercentage >= 30 && devPercentage < 50) || (top5Percentage >= 50 && top5Percentage < 70);
+        case 'high':
+          return (devPercentage >= 20 && devPercentage < 30) || (top5Percentage >= 40 && top5Percentage < 50);
+        case 'moderate':
+          return (devPercentage >= 10 && devPercentage < 20) || (top5Percentage >= 30 && top5Percentage < 40);
+        case 'elevated':
+          return (devPercentage >= 5 && devPercentage < 10) || (top5Percentage >= 20 && top5Percentage < 30);
+        case 'guarded':
+          return (devPercentage >= 2 && devPercentage < 5) || (top5Percentage >= 10 && top5Percentage < 20);
+        case 'low':
+          return devPercentage < 2 && top5Percentage < 10;
+        default:
+          return true;
+      }
+    } catch (error) {
+      console.error('Error processing token risk:', error);
+      return false;
+    }
+  });
+}, [searchQuery, sortBy, riskFilter]);
+
+// Remove the duplicate TokensPage component and keep only one export
 export default function TokensPage() {
   const [tokens, setTokens] = useState<Token[]>([]);
   const [sortBy, setSortBy] = useState<SortOption>('newest');
