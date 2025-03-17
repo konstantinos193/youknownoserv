@@ -4,7 +4,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Search, ArrowUpDown, Filter, Globe, Send } from "lucide-react"
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -823,6 +823,14 @@ const fetchCreatorBalance = async (creatorId: string) => {
   }
 };
 
+export default function TokensPage() {
+  const [tokens, setTokens] = useState<Token[]>([]);
+  const [sortBy, setSortBy] = useState<SortOption>('newest');
+  const [riskFilter, setRiskFilter] = useState<RiskFilter>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [filteredTokens, setFilteredTokens] = useState<Token[]>([]);
 const filterAndSortTokens = (tokensToFilter: Token[]) => {
   let result = [...tokensToFilter];
 
