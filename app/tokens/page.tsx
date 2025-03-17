@@ -900,13 +900,12 @@ export default function TokensPage() {
     const tokenIds = result.map(t => t.id);
     const holdersMap = await fetchTokenHolders(tokenIds, result[0]?.creator || '');
 
-    // Helper function to get risk level number (for sorting)
-    const getRiskLevel = (token: Token) => {
-      const holders = holdersMap[token.id]?.data || [];
-      
+    // Helper function to determine risk level
+    const getRiskLevel = (token: Token): string => {
       // Check for zero holders first
-      if (token.holder_count === 0) return 7; // Highest risk
+      if (token.holder_count === 0) return 'extreme';
 
+      const holders = holdersMap[token.id]?.data || [];
       const devHolder = holders.find(h => h.user === token.creator);
       const devHoldings = devHolder ? Number(devHolder.balance) / 1e11 : 0;
       const totalSupplyNum = Number(token.total_supply) / 1e11;
@@ -916,49 +915,49 @@ export default function TokensPage() {
       const top5Holdings = sortedHolders.slice(0, 5).reduce((sum, h) => sum + Number(h.balance) / 1e11, 0);
       const top5Percentage = (top5Holdings / totalSupplyNum) * 100;
 
-      // Return risk level number (higher = riskier)
-      if (devPercentage >= 50 || top5Percentage >= 70) return 6; // extreme
-      if (devPercentage >= 30 || top5Percentage >= 50) return 5; // very_high
-      if (devPercentage >= 20 || top5Percentage >= 40) return 4; // high
-      if (devPercentage >= 10 || top5Percentage >= 30) return 3; // moderate
-      if (devPercentage >= 5 || top5Percentage >= 20) return 2; // elevated
-      if (devPercentage >= 2 || top5Percentage >= 10) return 1; // guarded
-      return 0; // low
+      // Check for dev with multiple tokens
+      if (!TRUSTED_DEVELOPERS.includes(token.creator)) {
+        const creatorTokens = await fetchCreatorTokens(token.creator);
+        if (creatorTokens.length > 1) return 'extreme';
+      }
+
+      // Determine risk level
+      if (devPercentage >= 50 || top5Percentage >= 70) return 'extreme';
+      if (devPercentage >= 30 || top5Percentage >= 50) return 'very_high';
+      if (devPercentage >= 20 || top5Percentage >= 40) return 'high';
+      if (devPercentage >= 10 || top5Percentage >= 30) return 'moderate';
+      if (devPercentage >= 5 || top5Percentage >= 20) return 'elevated';
+      if (devPercentage >= 2 || top5Percentage >= 10) return 'guarded';
+      return 'low';
     };
 
     // Filter based on risk level if not 'all'
     if (riskFilter !== 'all') {
       result = result.filter(token => {
-        const riskLevel = getRiskLevel(token);
-        switch (riskFilter) {
-          case 'extreme': return riskLevel === 6 || riskLevel === 7;
-          case 'very_high': return riskLevel === 5;
-          case 'high': return riskLevel === 4;
-          case 'moderate': return riskLevel === 3;
-          case 'elevated': return riskLevel === 2;
-          case 'guarded': return riskLevel === 1;
-          case 'low': return riskLevel === 0;
-          default: return true;
-        }
+        const tokenRiskLevel = getRiskLevel(token);
+        return tokenRiskLevel === riskFilter;
       });
     }
 
-    // Sort tokens by risk level first, then by the selected sort criteria
+    // Apply sorting
     result.sort((a, b) => {
-      // If sorting by risk level
-      if (sortBy === 'risk_high') {
-        return getRiskLevel(b) - getRiskLevel(a);
-      }
-      if (sortBy === 'risk_low') {
-        return getRiskLevel(a) - getRiskLevel(b);
-      }
+      const riskLevels = {
+        'low': 0,
+        'guarded': 1,
+        'elevated': 2,
+        'moderate': 3,
+        'high': 4,
+        'very_high': 5,
+        'extreme': 6
+      };
 
-      // For other sort criteria, sort within the same risk level
-      const riskA = getRiskLevel(a);
-      const riskB = getRiskLevel(b);
-      
+      const riskA = riskLevels[getRiskLevel(a)];
+      const riskB = riskLevels[getRiskLevel(b)];
+
+      // If risk levels are different and we're filtering by risk,
+      // sort by risk level first
       if (riskFilter !== 'all' && riskA !== riskB) {
-        return riskA - riskB; // Sort by risk level first
+        return riskA - riskB;
       }
 
       // Then apply the selected sort criteria
