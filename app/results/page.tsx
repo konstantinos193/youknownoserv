@@ -505,6 +505,19 @@ const AsyncRiskAnalysis = ({
   useEffect(() => {
     const updateRiskAnalysis = async () => {
       try {
+        // Check for zero holders first
+        if (totalHolders === 0) {
+          const rugRisk = {
+            level: "RUGGED",
+            color: "text-red-600",
+            message: "Token has been rugged - All holders have sold",
+            warning: "DANGER: Token has 0 holders"
+          };
+          setRisk(rugRisk);
+          if (onRiskUpdate) onRiskUpdate(rugRisk);
+          return;
+        }
+
         // Check if we have valid holders data
         if (!holders || holders.length === 0) {
           setRisk({
@@ -629,7 +642,7 @@ const AsyncRiskAnalysis = ({
     };
 
     updateRiskAnalysis();
-  }, [holders, totalSupply, creatorId, tokenId, onRiskUpdate]);
+  }, [holders, totalSupply, creatorId, tokenId, onRiskUpdate, totalHolders]);
 
   if (!risk) {
     return <div className="text-gray-400">Calculating risk...</div>;
@@ -1426,7 +1439,19 @@ export default function ResultsPage() {
         <div className="grid gap-6 md:grid-cols-2">
           <div className="terminal-card p-4">
             <h2 className="mb-4 text-sm font-medium">Risk Analysis</h2>
-            {holders.length > 0 ? (
+            {tokenData.holder_count === 0 ? (
+              <div>
+                <div className="text-xl font-bold mb-2 text-red-600">
+                  RUGGED
+                </div>
+                <div className="text-sm font-medium mb-2 text-red-600">
+                  DANGER: Token has 0 holders
+                </div>
+                <p className="text-sm text-gray-400 mb-4">
+                  Token has been rugged - All holders have sold
+                </p>
+              </div>
+            ) : holders.length > 0 ? (
               <AsyncRiskAnalysis 
                 holders={holders}
                 totalSupply={tokenData.total_supply}
