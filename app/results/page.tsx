@@ -1,13 +1,14 @@
 'use client';
 
 // Client component
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation'; // Import useSearchParams from Next.js
 import Link from "next/link"; // Ensure this is only declared once
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ExternalLink, Globe, X, Send } from "lucide-react";
 import { formatSupply } from '../../utils/formatSupply';
 import { Market } from '@/types/market';
+import { calculateRiskLevel } from '@/utils/calculateRiskLevel';
 
 // Add constants at the top of the file
 const TRUSTED_DEVELOPERS = [
@@ -15,7 +16,9 @@ const TRUSTED_DEVELOPERS = [
 ];
 
 // Add this helper function
-const formatUSDValue = (value: number): string => {
+const formatUSDValue = (value: number | undefined | null): string => {
+  if (value === undefined || value === null) return '$0.00';
+  
   if (value >= 1e9) {
     return `$${(value / 1e9).toFixed(2)}B`;
   } else if (value >= 1e6) {
@@ -148,6 +151,8 @@ const API_HEADERS = {
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY;
+
 const fetchWithRetry = async (url: string, options = {}) => {
   const maxRetries = 3;
   const backoffDelay = 1000;
@@ -164,6 +169,7 @@ const fetchWithRetry = async (url: string, options = {}) => {
         headers: {
           ...API_HEADERS,
           'User-Agent': randomUserAgent,
+          'x-api-key': API_KEY || '',
         },
         cache: 'no-store'
       });
@@ -192,12 +198,28 @@ const fetchWithRetry = async (url: string, options = {}) => {
   throw lastError || new Error('Max retries reached');
 };
 
+// First, add the API_URL constant at the top of the file
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+// Update the fetch functions to include the API key header
+const fetchWithAuth = async (url: string) => {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'x-api-key': API_KEY || '',
+      }
+    });
+    return response;
+  } catch (error) {
+    console.error('Fetch error:', error);
+    throw error;
+  }
+};
+
 // Update fetchCreatorTokens
 const fetchCreatorTokens = async (creatorId: string) => {
   try {
-    const response = await fetchWithRetry(
-      `https://api.odin.fun/v1/user/${creatorId}/created?sort=last_action_time%3Adesc&page=1&limit=30`
-    );
+    const response = await fetch(`${API_URL}/api/user/${creatorId}/created`);
     const data = await response.json();
     return data.data || [];
   } catch (error) {
@@ -209,9 +231,7 @@ const fetchCreatorTokens = async (creatorId: string) => {
 // Update fetchDevTokenHoldings
 const fetchDevTokenHoldings = async (creatorId: string, tokenId: string) => {
   try {
-    const response = await fetchWithRetry(
-      `https://api.odin.fun/v1/user/${creatorId}/tokens`
-    );
+    const response = await fetch(`${API_URL}/api/user/${creatorId}/tokens`);
     const data = await response.json();
     const tokenHolding = data.data.find(item => item.token.id === tokenId);
     return tokenHolding?.balance || 0;
@@ -221,13 +241,11 @@ const fetchDevTokenHoldings = async (creatorId: string, tokenId: string) => {
   }
 };
 
-// Update the analyzeDevTrading function
+// Update analyzeDevTrading
 const analyzeDevTrading = async (creatorId: string, tokenId: string) => {
   try {
-    // Get specific token's trading history for the dev
     const response = await fetch(
-      `https://api.odin.fun/v1/token/${tokenId}/history?user=${creatorId}&sort=created_time:desc&page=1&limit=100`,
-      { headers: API_HEADERS }
+      `${API_URL}/api/token/${tokenId}/history?user=${creatorId}`
     );
     
     if (!response.ok) return null;
@@ -279,13 +297,10 @@ const analyzeDevTrading = async (creatorId: string, tokenId: string) => {
   }
 };
 
-// Update the calculate24hVolumeSpike function
+// Update calculate24hVolumeSpike
 const calculate24hVolumeSpike = async (tokenId: string) => {
   try {
-    // Fetch trades for the last 7 days
-    const response = await fetchWithRetry(
-      `https://api.odin.fun/v1/token/${tokenId}/trades?page=1&limit=9999`
-    );
+    const response = await fetch(`${API_URL}/api/token/${tokenId}/trades`);
     const data = await response.json();
     const trades = data.data || [];
 
@@ -347,148 +362,100 @@ const calculate24hVolumeSpike = async (tokenId: string) => {
   }
 };
 
+// Add this helper function near the top with other helpers
+const calculateVolumeSpike = (trades: any[]) => {
+  const now = new Date();
+  const last24h = new Date(now.getTime() - (24 * 60 * 60 * 1000));
+  const last7d = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
+
+  // Calculate 24h volume
+  const trades24h = trades.filter(tx => new Date(tx.time) > last24h);
+  const volume24h = trades24h.reduce((sum, tx) => sum + (Number(tx.amount_btc) / 1e11), 0);
+
+  // Calculate previous 6 days volume (excluding last 24h)
+  const trades7d = trades.filter(tx => {
+    const txTime = new Date(tx.time);
+    return txTime > last7d && txTime <= last24h;
+  });
+
+  // Calculate average daily volume from previous 6 days
+  const volume7d = trades7d.reduce((sum, tx) => sum + (Number(tx.amount_btc) / 1e11), 0);
+  const averageDailyVolume = volume7d / 6;
+
+  return averageDailyVolume > 0 ? volume24h / averageDailyVolume : 1;
+};
+
 // Update the calculateOverallRisk function
-const calculateOverallRisk = async (holders: any[], totalSupply: string, creatorId: string, totalHolders: number, tokenId: string, tokenData: any) => {
+const calculateOverallRisk = async (
+  holders: any[],
+  totalSupply: string,
+  creatorId: string,
+  totalHolders: number,
+  tokenId: string,
+  tokenData: any,
+  combinedData: any // Add combinedData parameter
+) => {
   const dangers = [];
   
-  // Add volume spike analysis
-  const volumeMetrics = await calculate24hVolumeSpike(tokenId);
-  if (volumeMetrics.spikeRatio > 3) {
-    dangers.push({
-      warning: "Unusual Volume Activity",
-      message: `24h volume is ${volumeMetrics.spikeRatio.toFixed(1)}x higher than 7-day average`
-    });
-  }
+  // Use trades from combined data
+  const trades = combinedData.trades.data || [];
+  const creatorTokens = combinedData.creator?.created || [];
+
+  // Calculate volume metrics
+  const volumeMetrics = calculateVolumeMetrics(trades);
   
-  if (!TRUSTED_DEVELOPERS.includes(creatorId)) {
-    // Check for multiple tokens
-    const creatorTokens = await fetchCreatorTokens(creatorId);
-    if (creatorTokens.length > 1) {
-      const uniqueTickers = [...new Set(creatorTokens.map(t => t.ticker))];
-      const displayTickers = uniqueTickers.slice(0, 5);
-      const remainingCount = uniqueTickers.length - 5;
-      const tickerDisplay = remainingCount > 0 
-        ? `${displayTickers.join(', ')} and ${remainingCount} more`
-        : displayTickers.join(', ');
-      
-      dangers.push({
-        warning: "Multiple tokens by creator",
-        message: `Developer has created ${uniqueTickers.length} tokens (${tickerDisplay})`
-      });
-    }
+  // ... rest of risk calculation logic ...
 
-    // Check for dev selling everything
-    const devHoldings = await fetchDevTokenHoldings(creatorId, tokenId);
-    if (devHoldings === 0) {
-      dangers.push({
-        warning: "Developer has no holdings",
-        message: "Developer has sold their entire position"
-      });
-    }
-
-    // Check for dump and rebuy with more detailed message
-    const tradingAnalysis = await analyzeDevTrading(creatorId, tokenId);
-    if (tradingAnalysis?.hasSoldAndRebought) {
-      dangers.push({
-        warning: "Developer dump and rebuy detected",
-        message: `Developer has sold ${tradingAnalysis.percentageSold.toFixed(2)}% of their initial holdings (${tradingAnalysis.devSellCount} sells, ${tradingAnalysis.devBuyCount} buys)`
-      });
-    }
-  }
-
-  // Calculate percentages
-  const devHolder = holders.find(holder => holder.user === creatorId);
-  const devPercentage = devHolder 
-    ? (Number(devHolder.balance) / Number(totalSupply)) * 100 
-    : 0;
-
-  const top5Holdings = holders
-    .slice(0, 5)
-    .reduce((sum, holder) => sum + Number(holder.balance), 0);
-  const top5Percentage = (top5Holdings / Number(totalSupply)) * 100;
-
-  const top10Holdings = holders
-    .slice(0, 10)
-    .reduce((sum, holder) => sum + Number(holder.balance), 0);
-  const top10Percentage = (top10Holdings / Number(totalSupply)) * 100;
-
-  // Determine base risk level
-  let riskLevel;
-  if (devPercentage >= 50 || top5Percentage >= 70) {
-    riskLevel = {
-      level: "EXTREME RISK",
-      message: "Extremely high centralization. High probability of price manipulation.",
-      color: "text-red-600",
-      warning: "DANGER: Highly centralized token distribution"
-    };
-    dangers.push({
-      warning: "Highly centralized distribution",
-      message: `Dev holds ${devPercentage.toFixed(2)}%, Top 5 hold ${top5Percentage.toFixed(2)}%`
-    });
-  } else if (devPercentage >= 30 || top5Percentage >= 50) {
-    riskLevel = {
-      level: "VERY HIGH RISK",
-      message: "Very high centralization detected. Major price manipulation risk.",
-      color: "text-red-500",
-      warning: "WARNING: Significant whale concentration"
-    };
-  } else if (devPercentage >= 20 || top5Percentage >= 40) {
-    riskLevel = {
-      level: "HIGH RISK",
-      message: "High holder concentration. Exercise extreme caution.",
-      color: "text-orange-500",
-      warning: "CAUTION: High holder concentration"
-    };
-  } else if (devPercentage >= 10 || top5Percentage >= 30) {
-    riskLevel = {
-      level: "MODERATE RISK",
-      message: "Moderate centralization risks present. Trade carefully.",
-      color: "text-yellow-500",
-      warning: "NOTICE: Moderate centralization"
-    };
-  } else if (devPercentage >= 5 || top5Percentage >= 20) {
-    riskLevel = {
-      level: "ELEVATED RISK",
-      message: "Slightly elevated concentration risks. Monitor closely.",
-      color: "text-yellow-400",
-      warning: "INFO: Elevated concentration"
-    };
-  } else if (devPercentage >= 2 || top5Percentage >= 10) {
-    riskLevel = {
-      level: "GUARDED RISK",
-      message: "Low centralization risks, but remain vigilant.",
-      color: "text-blue-400",
-      warning: "SAFE: Limited concentration"
-    };
-  } else {
-    riskLevel = {
-      level: "LOW RISK",
-      message: "Healthy token distribution detected.",
-      color: "text-green-500",
-      warning: "GOOD: Well distributed"
-    };
-  }
-
-  // If there are any dangers, override with HIGH RISK
-  if (dangers.length > 0) {
-    return {
-      level: "HIGH RISK",
-      message: "Multiple high risk factors detected. Exercise extreme caution.",
-      color: "text-red-500",
-      warning: "DANGER: Multiple risk factors",
-      dangers: dangers,
-      volumeMetrics
-    };
-  }
-
-  // Update the return object to include volume metrics
-  const riskAssessment = {
-    ...riskLevel,
+  return {
+    dangers,
     volumeMetrics,
-    dangers
+    // ... other analysis results ...
   };
+};
 
-  return riskAssessment;
+// Separate volume metrics calculation
+const calculateVolumeMetrics = (trades: any[]) => {
+  const now = new Date();
+  const last24h = new Date(now.getTime() - (24 * 60 * 60 * 1000));
+  const last7d = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
+
+  const trades24h = trades.filter(tx => new Date(tx.time) > last24h);
+  
+  // Calculate total 24h volume
+  const volume24h = trades24h.reduce((sum, tx) => sum + (Number(tx.amount_btc) / 1e11), 0);
+
+  // Calculate buy and sell volumes
+  const buyVolume24h = trades24h
+    .filter(tx => tx.buy)
+    .reduce((sum, tx) => sum + (Number(tx.amount_btc) / 1e11), 0);
+  
+  const sellVolume24h = trades24h
+    .filter(tx => !tx.buy)
+    .reduce((sum, tx) => sum + (Number(tx.amount_btc) / 1e11), 0);
+
+  // Calculate buy/sell ratio (avoid division by zero)
+  const buySellRatio = sellVolume24h > 0 ? buyVolume24h / sellVolume24h : 1;
+
+  // Calculate 7d metrics
+  const trades7d = trades.filter(tx => {
+    const txTime = new Date(tx.time);
+    return txTime > last7d && txTime <= last24h;
+  });
+  const volume7d = trades7d.reduce((sum, tx) => sum + (Number(tx.amount_btc) / 1e11), 0);
+  const averageDailyVolume = volume7d / 6;
+
+  return {
+    spikeRatio: averageDailyVolume > 0 ? volume24h / averageDailyVolume : 1,
+    volume24h,
+    averageDailyVolume,
+    volumeChange: averageDailyVolume > 0 
+      ? ((volume24h - averageDailyVolume) / averageDailyVolume * 100).toFixed(2)
+      : '0.00',
+    tradeCount24h: trades24h.length,
+    buyVolume24h,
+    sellVolume24h,
+    buySellRatio
+  };
 };
 
 // Add this loading skeleton for the risk analysis section
@@ -530,45 +497,138 @@ const AsyncRiskAnalysis = ({
 }) => {
   const [risk, setRisk] = useState(null);
 
-  // Calculate percentages
-  const devHolder = holders.find(h => h.user === creatorId);
-  const devHoldings = devHolder ? Number(devHolder.balance) : 0;
-  const devPercentage = (devHoldings / Number(totalSupply)) * 100;
-
-  const sortedHolders = [...holders].sort((a, b) => Number(b.balance) - Number(a.balance));
-  const top5Holdings = sortedHolders.slice(0, 5).reduce((sum, h) => sum + Number(h.balance), 0);
-  const top10Holdings = sortedHolders.slice(0, 10).reduce((sum, h) => sum + Number(h.balance), 0);
-  
-  const top5Percentage = (top5Holdings / Number(totalSupply)) * 100;
-  const top10Percentage = (top10Holdings / Number(totalSupply)) * 100;
-
   useEffect(() => {
     const updateRiskAnalysis = async () => {
-      const riskData = await calculateOverallRisk(
-        holders,
-        totalSupply,
-        creatorId,
-        totalHolders,
-        tokenId,
-        tokenData
-      );
-      
-      // Only update if data has changed
-      if (JSON.stringify(riskData) !== JSON.stringify(risk)) {
-        setRisk(riskData);
-        onRiskUpdate(riskData); // Call the callback with new risk data
+      try {
+        // Check if we have valid holders data
+        if (!holders || holders.length === 0) {
+          setRisk({
+            level: "ERROR",
+            color: "text-red-600",
+            message: "No holder data available",
+            warning: "Error calculating risk level"
+          });
+          return;
+        }
+
+        // Find developer's holdings
+        const devHolder = holders.find(h => h.user === creatorId);
+        const devHoldings = devHolder ? Number(devHolder.balance) / 1e11 : 0;
+        const totalSupplyNum = Number(totalSupply) / 1e11;
+        const devPercentage = (devHoldings / totalSupplyNum) * 100;
+
+        // Sort holders by balance for top holder calculations
+        const sortedHolders = [...holders].sort((a, b) => Number(b.balance) - Number(a.balance));
+        const top5Holdings = sortedHolders.slice(0, 5).reduce((sum, h) => sum + Number(h.balance) / 1e11, 0);
+        const top10Holdings = sortedHolders.slice(0, 10).reduce((sum, h) => sum + Number(h.balance) / 1e11, 0);
+        
+        const top5Percentage = (top5Holdings / totalSupplyNum) * 100;
+        const top10Percentage = (top10Holdings / totalSupplyNum) * 100;
+
+        // Build concise warning message
+        const holderStats = [
+          `Dev: ${devPercentage.toFixed(2)}%`,
+          `Top 5: ${top5Percentage.toFixed(2)}%`,
+          `Top 10: ${top10Percentage.toFixed(2)}%`
+        ].join(' | ');
+
+        let warnings = [];
+        let isExtremeRisk = false;
+
+        // Check if dev has sold position
+        if (devHoldings <= 0 || isNaN(devHoldings)) {
+          warnings.push("Developer has sold their entire position");
+          isExtremeRisk = true;
+        }
+
+        // Check for multiple tokens by developer
+        if (!TRUSTED_DEVELOPERS.includes(creatorId)) {
+          const creatorTokens = await fetchCreatorTokens(creatorId);
+          if (creatorTokens && creatorTokens.length > 1) {
+            warnings.push(`Developer has created ${creatorTokens.length} tokens`);
+            isExtremeRisk = true;
+          }
+        }
+
+        let riskAssessment;
+
+        // If either extreme risk condition is met, show combined warnings
+        if (isExtremeRisk) {
+          riskAssessment = {
+            level: "EXTREME RISK",
+            color: "text-red-600",
+            message: "Multiple high-risk factors detected - Extreme risk of abandonment",
+            warning: `DANGER: ${warnings.join(" & ")}`,
+            stats: {
+              devPercentage,
+              top5Percentage,
+              top10Percentage
+            }
+          };
+        }
+        // Regular risk level checks
+        else if (devPercentage >= 50 || top5Percentage >= 70) {
+          riskAssessment = {
+            level: "EXTREME RISK",
+            color: "text-red-600",
+            message: "Extremely high centralization. High probability of price manipulation.",
+            warning: holderStats,
+            stats: { devPercentage, top5Percentage, top10Percentage }
+          };
+        } else if (devPercentage >= 30 || top5Percentage >= 50) {
+          riskAssessment = {
+            level: "VERY HIGH RISK",
+            color: "text-red-500",
+            message: "Very high centralization detected. Major price manipulation risk.",
+            warning: holderStats,
+            stats: { devPercentage, top5Percentage, top10Percentage }
+          };
+        } else if (devPercentage >= 20 || top5Percentage >= 40) {
+          riskAssessment = {
+            level: "HIGH RISK",
+            color: "text-orange-500",
+            message: "High holder concentration. Exercise extreme caution.",
+            warning: holderStats,
+            stats: { devPercentage, top5Percentage, top10Percentage }
+          };
+        } else if (devPercentage >= 10 || top5Percentage >= 30) {
+          riskAssessment = {
+            level: "MODERATE RISK",
+            color: "text-yellow-500",
+            message: "Standard market risks apply. Trade carefully.",
+            warning: holderStats,
+            stats: { devPercentage, top5Percentage, top10Percentage }
+          };
+        } else {
+          riskAssessment = {
+            level: "LOW RISK",
+            color: "text-green-500",
+            message: "Well distributed token supply",
+            warning: holderStats,
+            stats: { devPercentage, top5Percentage, top10Percentage }
+          };
+        }
+
+        setRisk(riskAssessment);
+        if (onRiskUpdate) onRiskUpdate(riskAssessment);
+
+      } catch (err) {
+        console.error('Error in risk analysis:', err);
+        setRisk({
+          level: "ERROR",
+          color: "text-red-600",
+          message: "Error calculating risk level",
+          warning: "Error in risk analysis"
+        });
       }
     };
 
-    // Initial load
     updateRiskAnalysis();
+  }, [holders, totalSupply, creatorId, tokenId, onRiskUpdate]);
 
-    // Silent real-time updates
-    const interval = setInterval(updateRiskAnalysis, 5000);
-    return () => clearInterval(interval);
-  }, [holders, totalSupply, creatorId, totalHolders, tokenId, tokenData]);
-
-  if (!risk) return null;
+  if (!risk) {
+    return <div className="text-gray-400">Calculating risk...</div>;
+  }
 
   return (
     <div>
@@ -582,12 +642,13 @@ const AsyncRiskAnalysis = ({
         {risk.message}
       </p>
 
-      {/* Existing holder metrics */}
-      <div className="mt-4 text-sm text-gray-400 space-y-1">
-        <p>• Developer holds {devPercentage.toFixed(2)}% of supply</p>
-        <p>• Top 5 holders control {top5Percentage.toFixed(2)}% of supply</p>
-        <p>• Top 10 holders control {top10Percentage.toFixed(2)}% of supply</p>
-      </div>
+      {risk.stats && (
+        <div className="mt-4 text-sm text-gray-400 space-y-1">
+          <p>• Developer holds {risk.stats.devPercentage.toFixed(2)}% of supply</p>
+          <p>• Top 5 holders control {risk.stats.top5Percentage.toFixed(2)}% of supply</p>
+          <p>• Top 10 holders control {risk.stats.top10Percentage.toFixed(2)}% of supply</p>
+        </div>
+      )}
     </div>
   );
 };
@@ -600,13 +661,20 @@ interface BTCPrice {
 
 // Then update the VolumeAnalysis component
 const VolumeAnalysis = ({ volumeMetrics, btcUsdPrice }: { volumeMetrics: any, btcUsdPrice: number }) => {
-  if (!volumeMetrics || !btcUsdPrice) return null;
+  console.log('Received volumeMetrics:', volumeMetrics);
 
-  // Convert BTC volumes to USD
-  const volume24hUSD = volumeMetrics.volume24h * btcUsdPrice;
-  const avgDailyVolumeUSD = volumeMetrics.averageDailyVolume * btcUsdPrice;
-  const buyVolumeUSD = volumeMetrics.buyVolume24h * btcUsdPrice;
-  const sellVolumeUSD = volumeMetrics.sellVolume24h * btcUsdPrice;
+  // Create a safe metrics object with fallback values
+  const metrics = {
+    volume24hUSD: volumeMetrics?.volume24hUSD ?? 0,
+    averageDailyVolumeUSD: volumeMetrics?.averageDailyVolumeUSD ?? 0,
+    tradeCount24h: volumeMetrics?.tradeCount24h ?? 0,
+    buyVolumeUSD: volumeMetrics?.buyVolumeUSD ?? 0,
+    sellVolumeUSD: volumeMetrics?.sellVolumeUSD ?? 0,
+    buySellRatio: volumeMetrics?.buySellRatio ?? 1,
+    spikeRatio: volumeMetrics?.spikeRatio ?? 1
+  };
+
+  console.log('Processed metrics:', metrics);
 
   return (
     <div className="terminal-card p-4">
@@ -614,31 +682,31 @@ const VolumeAnalysis = ({ volumeMetrics, btcUsdPrice }: { volumeMetrics: any, bt
       <div className="space-y-2 text-sm">
         <div className="data-row">
           <span className="data-label">24h Volume</span>
-          <span>{formatUSDValue(volume24hUSD)}</span>
+          <span>{formatUSDValue(metrics.volume24hUSD)}</span>
         </div>
         <div className="data-row">
           <span className="data-label">Avg Daily Volume</span>
-          <span>{formatUSDValue(avgDailyVolumeUSD)}</span>
+          <span>{formatUSDValue(metrics.averageDailyVolumeUSD)}</span>
         </div>
         <div className="data-row">
           <span className="data-label">24h Trades</span>
-          <span>{volumeMetrics.tradeCount24h}</span>
+          <span>{metrics.tradeCount24h}</span>
         </div>
         <div className="data-row">
           <span className="data-label">Buy Volume</span>
-          <span>{formatUSDValue(buyVolumeUSD)}</span>
+          <span>{formatUSDValue(metrics.buyVolumeUSD)}</span>
         </div>
         <div className="data-row">
           <span className="data-label">Sell Volume</span>
-          <span>{formatUSDValue(sellVolumeUSD)}</span>
+          <span>{formatUSDValue(metrics.sellVolumeUSD)}</span>
         </div>
         <div className="data-row">
           <span className="data-label">Buy/Sell Ratio</span>
-          <span>{volumeMetrics.buySellRatio.toFixed(2)}</span>
+          <span>{metrics.buySellRatio.toFixed(2)}</span>
         </div>
         <div className="data-row">
           <span className="data-label">Volume Trend</span>
-          <span>{volumeMetrics.spikeRatio.toFixed(2)}x average</span>
+          <span>{metrics.spikeRatio.toFixed(2)}x average</span>
         </div>
       </div>
     </div>
@@ -936,6 +1004,120 @@ const calculateHolderAnalysis = async (tokenId: string, holders: any[]): Promise
   }
 };
 
+// Update the calculateTokenPrice helper function
+const calculateTokenPrice = (marketcap: number, totalSupply: number, btcUsdPrice: number): string => {
+  try {
+    // Calculate price in BTC
+    const priceInBtc = (marketcap / totalSupply) / 1e5; // Divide by 1e5 for correct decimals
+    
+    // Convert to USD
+    return (priceInBtc * btcUsdPrice).toFixed(8);
+  } catch (error) {
+    console.error('Price calculation error:', error);
+    return '0.00000000';
+  }
+};
+
+const calculateRiskLevel = async (token: Token & { holders?: any[], devHoldings?: number }): Promise<RiskAssessment> => {
+  const totalSupply = Number(token.total_supply);
+  const devHoldings = token.devHoldings || token.holders?.find(h => h.address === token.creator)?.balance || 0;
+  const devPercentage = (devHoldings / totalSupply) * 100;
+
+  // Sort holders by balance for top holder calculations
+  const sortedHolders = [...(token.holders || [])].sort((a, b) => Number(b.balance) - Number(a.balance));
+  const top5Holdings = sortedHolders.slice(0, 5).reduce((sum, h) => sum + Number(h.balance), 0);
+  const top10Holdings = sortedHolders.slice(0, 10).reduce((sum, h) => sum + Number(h.balance), 0);
+  
+  const top5Percentage = (top5Holdings / totalSupply) * 100;
+  const top10Percentage = (top10Holdings / totalSupply) * 100;
+
+  // Build concise warning message
+  const holderStats = [
+    `Dev: ${devPercentage.toFixed(2)}%`,
+    `Top 5: ${top5Percentage.toFixed(2)}%`,
+    `Top 10: ${top10Percentage.toFixed(2)}%`
+  ].join(' | ');
+
+  // Check if dev has sold position
+  if (devHoldings <= 0 || isNaN(devHoldings)) {
+    return {
+      level: 'EXTREME RISK',
+      color: 'text-red-600',
+      message: 'Developer has sold their entire position - Extreme risk of abandonment',
+      warning: 'Developer holds 0% of the supply'
+    };
+  }
+
+  // Check for multiple tokens by developer
+  if (!TRUSTED_DEVELOPERS.includes(token.creator)) {
+    try {
+      const creatorTokens = await fetchCreatorTokens(token.creator);
+      if (creatorTokens && creatorTokens.length > 1) {
+        return {
+          level: 'EXTREME RISK',
+          color: 'text-red-600',
+          message: 'Developer has created multiple tokens - Extreme risk of abandonment',
+          warning: `Developer has created ${creatorTokens.length} tokens`
+        };
+      }
+    } catch (error) {
+      console.error('Error checking creator tokens:', error);
+    }
+  }
+
+  // Continue with the regular risk level checks
+  if (devPercentage >= 50 || top5Percentage >= 70) {
+    return {
+      level: 'EXTREME RISK',
+      color: 'text-red-600',
+      message: 'Extremely high centralization. High probability of price manipulation.',
+      warning: holderStats
+    };
+  } else if (devPercentage >= 30 || top5Percentage >= 50) {
+    return {
+      level: 'VERY HIGH RISK',
+      color: 'text-red-500',
+      message: 'Very high centralization detected. Major price manipulation risk.',
+      warning: holderStats
+    };
+  } else if (devPercentage >= 20 || top5Percentage >= 40) {
+    return {
+      level: 'HIGH RISK',
+      color: 'text-orange-500',
+      message: 'High holder concentration. Exercise extreme caution.',
+      warning: holderStats
+    };
+  } else if (devPercentage >= 10 || top5Percentage >= 30) {
+    return {
+      level: 'MODERATE RISK',
+      color: 'text-yellow-500',
+      message: 'Standard market risks apply. Trade carefully.',
+      warning: holderStats
+    };
+  } else if (devPercentage >= 5 || top5Percentage >= 20) {
+    return {
+      level: 'ELEVATED RISK',
+      color: 'text-yellow-400',
+      message: 'Slightly elevated risk',
+      warning: holderStats
+    };
+  } else if (devPercentage >= 2 || top5Percentage >= 10) {
+    return {
+      level: 'GUARDED RISK',
+      color: 'text-blue-400',
+      message: 'Low concentration',
+      warning: holderStats
+    };
+  }
+
+  return {
+    level: 'LOW RISK',
+    color: 'text-green-500',
+    message: 'Well distributed',
+    warning: holderStats
+  };
+};
+
 export default function ResultsPage() {
   const searchParams = useSearchParams();
   const searchUrl = searchParams.get('search');
@@ -991,168 +1173,27 @@ export default function ResultsPage() {
 
   const fetchCreatorUsername = async (creatorId: string) => {
     try {
-      const response = await fetch(`https://api.odin.fun/v1/user/${creatorId}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch creator data');
-      }
-      const data = await response.json();
-      setCreatorUsername(data.username);
-    } catch (error) {
-      console.error('Error fetching creator username:', error);
-      setCreatorUsername('Unknown');
-    }
-  };
-
-  const fetchHolders = async () => {
-    try {
-      console.log('Starting to fetch holders for token:', tokenId);
-      let allHolders = [];
-      let currentPage = 1;
-      const limit = 20;
-      let hasMorePages = true;
-
-      // Try to get from cache first
-      if (cachedHolders.length > 0) {
-        console.log('Using cached holders:', cachedHolders.length);
-        setHolders(cachedHolders);
-      }
-
-      // Fetch all pages
-      while (hasMorePages) {
-        console.log(`Fetching holders page ${currentPage}`);
-        const response = await fetchWithRetry(
-          `https://api.odin.fun/v1/token/${tokenId}/owners?page=${currentPage}&limit=${limit}`
-        );
+      const response = await fetch(`${API_URL}/api/user/${creatorId}`, {
+        headers: {
+          'x-api-key': API_KEY || '',
+        }
+      });
+      
+      if (response.ok) {
         const data = await response.json();
-        
-        if (!data.data || data.data.length === 0) {
-          hasMorePages = false;
-          break;
-        }
-
-        allHolders = [...allHolders, ...data.data];
-        
-        // Check if we've reached the last page
-        if (data.data.length < limit || allHolders.length >= data.count) {
-          hasMorePages = false;
-        } else {
-          currentPage++;
-        }
+        // Check for username in the correct path of the response
+        return data.data?.username || data.username || creatorId;
       }
 
-      console.log(`Total holders fetched: ${allHolders.length}`);
+      return creatorId;
 
-      // Only update if we got new data
-      if (allHolders.length > 0) {
-        setHolders(allHolders);
-        setCachedHolders(allHolders); // Cache the successful response
-      } else if (cachedHolders.length === 0) {
-        // If no cached data and no new data, try direct API call
-        console.log('Attempting direct API call');
-        const directResponse = await fetch(
-          `https://api.odin.fun/v1/token/${tokenId}/owners?page=1&limit=100`,
-          { 
-            headers: {
-              ...API_HEADERS,
-              'User-Agent': `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${
-                Math.floor(Math.random() * 20 + 100)
-              }.0.0.0 Safari/537.36`,
-            },
-            cache: 'no-store'
-          }
-        );
-
-        if (directResponse.ok) {
-          const directData = await directResponse.json();
-          const directHolders = directData.data || [];
-          setHolders(directHolders);
-          setCachedHolders(directHolders);
-        }
-      }
     } catch (error) {
-      console.error('Error fetching holders:', error);
-      // Use cached data if available
-      if (cachedHolders.length > 0) {
-        console.log('Using cached holders after error');
-        setHolders(cachedHolders);
-      }
+      console.error('Error fetching creator data:', error);
+      return creatorId;
     }
   };
 
-  const fetchPrice = async () => {
-    try {
-      const response = await fetch(`/api/priceWebhook?tokenId=${tokenId}`);
-      
-      if (!response.ok) {
-        console.warn('Price API error, using last known price');
-        if (lastFetchedPrice) {
-          setPrice(lastFetchedPrice);
-          return;
-        }
-        throw new Error('Failed to fetch price data');
-      }
-      
-      const data = await response.json();
-      setPrice(data);
-      setLastFetchedPrice(data); // Save the successfully fetched price
-    } catch (error) {
-      console.error('Error fetching price:', error);
-      
-      // If we have a last known price, use it
-      if (lastFetchedPrice) {
-        setPrice(lastFetchedPrice);
-        return;
-      }
-
-      // If no last price available, try to calculate from token data
-      if (tokenData) {
-        const fallbackPrice = {
-          btcPrice: tokenData.btc_price || 0,
-          tokenPrice: tokenData.price || 0,
-          usdPrice: tokenData.price?.toLocaleString(undefined, {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 8,
-          }) || '0.00'
-        };
-        setPrice(fallbackPrice);
-        setLastFetchedPrice(fallbackPrice);
-      }
-    }
-  };
-
-  const fetchBTCPrice = async () => {
-    try {
-      const response = await fetch('https://mempool.space/api/v1/prices');
-      const data = await response.json();
-      setBtcUsdPrice(data.USD);
-    } catch (error) {
-      console.error('Error fetching BTC price:', error);
-    }
-  };
-
-  // Update the fetchTokenData function
-  const fetchTokenData = async () => {
-    try {
-      console.log('Fetching token data for:', tokenId);
-      const response = await fetchWithRetry(`https://api.odin.fun/v1/token/${tokenId}`);
-      const data = await response.json();
-      console.log('Token data response:', data);
-      setTokenData(data);
-      
-      // Fetch creator username when we get token data
-      if (data?.creator) {
-        await fetchCreatorUsername(data.creator);
-      }
-      
-      setLoading(false);
-    } catch (err) {
-      console.error('Fetch error:', err);
-      setError(err.message);
-      setLoading(false);
-    }
-  };
-
-  // Update the useEffect to include all required functions
+  // First useEffect for fetching token data
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -1162,28 +1203,72 @@ export default function ResultsPage() {
           return;
         }
 
-        // First fetch token data
-        await fetchTokenData();
+        const response = await fetch(`${API_URL}/api/token-data/${tokenId}`, {
+          headers: { 'x-api-key': API_KEY || '' }
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch data: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('API Response:', data);
         
-        // Then fetch holders
-        await fetchHolders();
+        setTokenData({
+          ...data.token,
+          volumeMetrics: data.volumeMetrics
+        });
         
-        // Other fetches can happen in parallel
-        await Promise.all([
-          fetchMarkets(),
-          fetchPrice(),
-          fetchBTCPrice()
-        ]);
+        setHolders(data.holders.data || []);
+        setCachedHolders(data.holders.data || []);
+        setBtcUsdPrice(data.btcUsdPrice);
+        
+        setPrice({
+          btcPrice: data.price.btcPrice,
+          tokenPrice: data.price.tokenPrice,
+          usdPrice: data.price.usdPrice
+        });
+        
+        setLastFetchedPrice({
+          btcPrice: data.price.btcPrice,
+          tokenPrice: data.price.tokenPrice,
+          usdPrice: data.price.usdPrice
+        });
+        
+        if (data.token?.creator) {
+          // Try to get username from the holders data first
+          const creatorHolder = data.holders?.data?.find(h => h.user === data.token.creator);
+          if (creatorHolder?.user_username) {
+            setCreatorUsername(creatorHolder.user_username);
+          } else {
+            const username = await fetchCreatorUsername(data.token.creator);
+            setCreatorUsername(username);
+          }
+        } else {
+          setCreatorUsername('Unknown');
+        }
+        
+        setHolderAnalysis(prev => ({
+          ...prev,
+          newHolderGrowthRate: data.holderGrowth || 0,
+          holderCount: data.token.holder_count || 0
+        }));
+
+        setLoading(false);
       } catch (error) {
         console.error('Error in fetchData:', error);
+        setError(error.message);
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [tokenId]); // tokenId is now properly in scope
+    const interval = setInterval(fetchData, 15000);
+    
+    return () => clearInterval(interval);
+  }, [tokenId]);
 
-  // Add a separate useEffect for holder analysis
+  // Separate useEffect for holder analysis
   useEffect(() => {
     const updateAnalysis = async () => {
       if (holders.length > 0) {
@@ -1196,9 +1281,15 @@ export default function ResultsPage() {
     updateAnalysis();
   }, [holders, tokenId]);
 
-  // Add new component for Holder Analysis
+  // Update the HolderAnalysisComponent
   const HolderAnalysisComponent = ({ holderAnalysis }: { holderAnalysis: HolderAnalysis }) => {
     if (!holderAnalysis) return null;
+    
+    // Add default values and null checks
+    const growthRate = holderAnalysis.newHolderGrowthRate ?? 0;
+    const accumulationTrend = holderAnalysis.top10AccumulationTrend ?? 0;
+    const accumulation = holderAnalysis.whaleActivity?.accumulation ?? 0;
+    const distribution = holderAnalysis.whaleActivity?.distribution ?? 0;
     
     return (
       <div className="terminal-card p-4">
@@ -1206,17 +1297,16 @@ export default function ResultsPage() {
         <div className="space-y-2 text-sm">
           <div className="data-row">
             <span className="data-label">New Holder Growth</span>
-            <span>{holderAnalysis.newHolderGrowthRate.toFixed(2)}%</span>
+            <span>{growthRate.toFixed(2)}%</span>
           </div>
           <div className="data-row">
             <span className="data-label">Top 10 Accumulation</span>
-            <span>{holderAnalysis.top10AccumulationTrend.toFixed(2)}%</span>
+            <span>{accumulationTrend.toFixed(2)}%</span>
           </div>
           <div className="data-row">
             <span className="data-label">Whale Distribution</span>
             <span>
-              {holderAnalysis.whaleActivity.accumulation} Active / 
-              {holderAnalysis.whaleActivity.distribution} Inactive
+              {accumulation} Active / {distribution} Inactive
             </span>
           </div>
         </div>
@@ -1224,9 +1314,16 @@ export default function ResultsPage() {
     );
   };
 
-  // Add new component for Holder Stats
+  // Update the HolderStats component
   const HolderStats = ({ holderAnalysis }: { holderAnalysis: HolderAnalysis }) => {
     if (!holderAnalysis) return null;
+    
+    // Add default values and null checks
+    const growthRate = holderAnalysis.newHolderGrowthRate ?? 0;
+    const accumulationTrend = holderAnalysis.top10AccumulationTrend ?? 0;
+    const holderCount = holderAnalysis.holderCount ?? 0;
+    const accumulation = holderAnalysis.whaleActivity?.accumulation ?? 0;
+    const distribution = holderAnalysis.whaleActivity?.distribution ?? 0;
     
     return (
       <div className="terminal-card p-4">
@@ -1234,21 +1331,20 @@ export default function ResultsPage() {
         <div className="space-y-2 text-sm">
           <div className="data-row">
             <span className="data-label">New Holders (24h)</span>
-            <span>{holderAnalysis.newHolderGrowthRate.toFixed(2)}%</span>
+            <span>{growthRate.toFixed(2)}%</span>
           </div>
           <div className="data-row">
             <span className="data-label">Top 10 Accumulation</span>
-            <span>{holderAnalysis.top10AccumulationTrend.toFixed(2)}%</span>
+            <span>{accumulationTrend.toFixed(2)}%</span>
           </div>
           <div className="data-row">
             <span className="data-label">Total Holders</span>
-            <span>{holderAnalysis.holderCount}</span>
+            <span>{holderCount}</span>
           </div>
           <div className="data-row">
             <span className="data-label">Whale Activity</span>
             <span>
-              {holderAnalysis.whaleActivity.accumulation} 🟢 / 
-              {holderAnalysis.whaleActivity.distribution} 🔴
+              {accumulation} 🟢 / {distribution} 🔴
             </span>
           </div>
         </div>
@@ -1335,7 +1431,9 @@ export default function ResultsPage() {
               <div className="space-y-2">
                 <div className="data-row">
                   <span className="data-label">Price</span>
-                  <span>${price?.usdPrice || '0.00'}</span>
+                  <span>
+                    ${price?.usdPrice || '0.00000000'}
+                  </span>
                 </div>
                 <div className="data-row">
                   <span className="data-label">Supply</span>
@@ -1387,12 +1485,18 @@ export default function ResultsPage() {
           {/* Volume and Holder Analysis Grid */}
           <div className="grid gap-6 md:grid-cols-2 md:col-span-2">
             {/* Volume Analysis */}
-            {riskAnalysis?.volumeMetrics && btcUsdPrice > 0 && (
-              <VolumeAnalysis 
-                volumeMetrics={riskAnalysis.volumeMetrics} 
-                btcUsdPrice={btcUsdPrice}
-              />
-            )}
+            <VolumeAnalysis 
+              volumeMetrics={tokenData?.volumeMetrics || {
+                volume24h: 0,
+                averageDailyVolume: 0,
+                tradeCount24h: 0,
+                buyVolume24h: 0,
+                sellVolume24h: 0,
+                buySellRatio: 1,
+                spikeRatio: 1
+              }}
+              btcUsdPrice={btcUsdPrice || 0}
+            />
             
             {/* Holder Analysis */}
             {holderAnalysis ? (
@@ -1479,9 +1583,10 @@ export default function ResultsPage() {
                 <tbody>
                   {holders.length > 0 ? (
                     holders.slice(0, 5).map((holder, index) => {
+                      // Fix balance calculation to match server
                       const adjustedBalance = Number(holder.balance) / 1e11;
-                      const totalSupply = Number(tokenData.total_supply) / Math.pow(10, 18);
-                      const percentage = ((Number(holder.balance) / Number(tokenData.total_supply)) * 100).toFixed(2);
+                      const totalSupply = Number(tokenData.total_supply) / 1e11; // Match the same divisor
+                      const percentage = (adjustedBalance / totalSupply * 100).toFixed(2);
                       
                       return (
                         <tr key={index}>

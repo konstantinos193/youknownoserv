@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search, ArrowUpDown, Filter } from "lucide-react"
+import { Search, ArrowUpDown, Filter, Globe, Send } from "lucide-react"
 import { useState, useEffect } from 'react';
 import { 
   DropdownMenu,
@@ -11,6 +11,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { calculateRiskLevel } from '@/utils/calculateRiskLevel';
+import { fetchCreatorTokens } from '@/utils/fetchCreatorTokens'; // Import the function
 
 interface Token {
   id: string;
@@ -26,6 +28,9 @@ interface Token {
   btc_liquidity: number;
   token_liquidity: number;
   creator_balance?: string;
+  website?: string;
+  twitter?: string;
+  telegram?: string;
 }
 
 interface RiskAssessment {
@@ -39,292 +44,253 @@ const TRUSTED_DEVELOPERS = [
   'vv5jb-7sm7u-vn3nq-6nflf-dghis-fd7ji-cx764-xunni-zosog-eqvpw-oae'
 ];
 
-const API_BASE_URL = 'https://api.odin.fun/v1';
+// Update the API_BASE_URL to point to your local server
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
-// Centralized fetch utility
-const fetchWithRetry = async (url: string) => {
-  const maxRetries = 3;
-  const backoffDelay = 1000;
-  const cacheKey = `api_cache_${url}`;
-  const cacheDuration = 5 * 60 * 1000; // 5 minutes
+// Add API key from environment variables
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY;
 
-  // Check cache first
-  try {
-    if (typeof window !== 'undefined') {
-      const cached = localStorage.getItem(cacheKey);
-      if (cached) {
-        const { data, timestamp } = JSON.parse(cached);
-        if (Date.now() - timestamp < cacheDuration) {
-          return data;
-        }
-        localStorage.removeItem(cacheKey);
-      }
+// Add this near the top of the file
+const REQUEST_THROTTLE_DELAY = 1000; // 1 second between batches
+const BATCH_SIZE = 5; // Number of requests per batch
+
+// Create a request queue and processing system
+let requestQueue: (() => Promise<void>)[] = [];
+let isProcessingQueue = false;
+
+const processQueue = async () => {
+  if (isProcessingQueue || requestQueue.length === 0) return;
+  isProcessingQueue = true;
+
+  while (requestQueue.length > 0) {
+    const batch = requestQueue.splice(0, BATCH_SIZE);
+    await Promise.all(batch.map(fn => fn()));
+    if (requestQueue.length > 0) {
+      await new Promise(resolve => setTimeout(resolve, REQUEST_THROTTLE_DELAY));
     }
-  } catch (error) {
-    console.warn('Cache read error:', error);
   }
 
-  // API call with retries
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      const randomUserAgent = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${
-        Math.floor(Math.random() * 20 + 100)
-      }.0.0.0 Safari/537.36`;
+  isProcessingQueue = false;
+};
 
-      const response = await fetch(url, {
-        headers: {
-          'Accept': 'application/json',
-          'User-Agent': randomUserAgent
-        },
-        cache: 'no-store'
-      });
+// Update fetchWithRetry to handle 404s more gracefully
+const fetchWithRetry = async (url: string) => {
+  return new Promise<any>((resolve) => {
+    const executeFetch = async () => {
+      const maxRetries = 3;
+      const backoffDelay = 1000;
+      const cacheKey = `api_cache_${url}`;
+      const cacheDuration = 5 * 60 * 1000; // 5 minutes
 
-      if (response.status === 429 || response.status === 403) {
-        if (attempt < maxRetries - 1) {
-          await new Promise(resolve => setTimeout(resolve, backoffDelay * Math.pow(2, attempt)));
-          continue;
-        }
-        return null;
-      }
+      // Ensure the URL starts with /api/ for user activity requests
+      const fullUrl = url.startsWith('/user/') 
+        ? `${API_BASE_URL}/api${url}`
+        : url.startsWith('/') 
+          ? `${API_BASE_URL}${url}`
+          : url;
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      // Cache successful response
+      // Check cache first
       try {
         if (typeof window !== 'undefined') {
-          localStorage.setItem(cacheKey, JSON.stringify({
-            data: data.data,
-            timestamp: Date.now()
-          }));
+          const cached = localStorage.getItem(cacheKey);
+          if (cached) {
+            const { data, timestamp } = JSON.parse(cached);
+            if (Date.now() - timestamp < cacheDuration) {
+              return resolve(data);
+            }
+            localStorage.removeItem(cacheKey);
+          }
         }
       } catch (error) {
-        console.warn('Cache write error:', error);
+        console.warn('Cache read error:', error);
       }
 
-      return data.data;
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          const headers: HeadersInit = {
+            'Accept': 'application/json',
+            'x-api-key': API_KEY || '' // Ensure API key is never undefined
+          };
 
-    } catch (error) {
-      console.error(`Attempt ${attempt + 1}/${maxRetries} failed:`, error);
-      if (attempt === maxRetries - 1) {
-        return null;
+          const response = await fetch(fullUrl, {
+            headers,
+            cache: 'no-store'
+          });
+
+          // Handle various status codes
+          if (response.status === 404) {
+            console.warn(`Resource not found at ${fullUrl}`);
+            return resolve(null);
+          }
+
+          if (response.status === 429 || response.status === 403) {
+            if (attempt < maxRetries - 1) {
+              await new Promise(resolve => setTimeout(resolve, backoffDelay * Math.pow(2, attempt)));
+              continue;
+            }
+            return resolve(null);
+          }
+
+          if (!response.ok) {
+            console.error(`API error: ${response.status} for ${fullUrl}`);
+            return resolve(null);
+          }
+
+          const data = await response.json();
+          
+          try {
+            if (typeof window !== 'undefined') {
+              localStorage.setItem(cacheKey, JSON.stringify({
+                data: data.data,
+                timestamp: Date.now()
+              }));
+            }
+          } catch (error) {
+            console.warn('Cache write error:', error);
+          }
+
+          return resolve(data.data);
+        } catch (error) {
+          console.error(`Attempt ${attempt + 1}/${maxRetries} failed for ${url}:`, error);
+          if (attempt === maxRetries - 1) {
+            return resolve(null);
+          }
+          await new Promise(resolve => setTimeout(resolve, backoffDelay * Math.pow(2, attempt)));
+        }
       }
-      await new Promise(resolve => setTimeout(resolve, backoffDelay * Math.pow(2, attempt)));
-    }
-  }
+    };
 
-  return null;
+    requestQueue.push(executeFetch);
+    processQueue();
+  });
 };
 
-// Helper function to process holder data
-function processHolderData(holders: any[], token: Token): RiskAssessment {
-  const dangers: string[] = [];
-  const totalSupply = Number(token.total_supply);
-  
-  // Calculate dev holdings
-  const devHoldings = holders.find(h => h.address === token.creator)?.balance || 0;
-  const devPercentage = (Number(devHoldings) / totalSupply) * 100;
-
-  // Sort holders by balance and calculate top holder percentages
-  const sortedHolders = [...holders].sort((a, b) => Number(b.balance) - Number(a.balance));
-  const top5Holdings = sortedHolders.slice(0, 5).reduce((sum, h) => sum + Number(h.balance), 0);
-  const top10Holdings = sortedHolders.slice(0, 10).reduce((sum, h) => sum + Number(h.balance), 0);
-  
-  const top5Percentage = (top5Holdings / totalSupply) * 100;
-  const top10Percentage = (top10Holdings / totalSupply) * 100;
-
-  // Build holder statistics message
-  const holderStats = [
-    `Developer holds ${devPercentage.toFixed(2)}% of supply`,
-    `Top 5 holders control ${top5Percentage.toFixed(2)}% of supply`,
-    `Top 10 holders control ${top10Percentage.toFixed(2)}% of supply`
-  ].join('\n• ');
-
-  // Determine risk level based on percentages
-  if (devPercentage >= 50 || top5Percentage >= 70) {
+// Update the processHolderData function
+async function processHolderData(holders: any[], token: Token): Promise<RiskAssessment> {
+  if (!holders || holders.length === 0) {
     return {
-      level: 'EXTREME RISK',
-      color: 'text-red-600',
-      message: 'Extremely high concentration detected',
-      warning: `• ${holderStats}`
-    };
-  } else if (devPercentage >= 30 || top5Percentage >= 50) {
-    return {
-      level: 'VERY HIGH RISK',
-      color: 'text-red-500',
-      message: 'Very high concentration detected',
-      warning: `• ${holderStats}`
-    };
-  } else if (devPercentage >= 20 || top5Percentage >= 40) {
-    return {
-      level: 'HIGH RISK',
-      color: 'text-orange-500',
-      message: 'High concentration detected',
-      warning: `• ${holderStats}`
-    };
-  } else if (devPercentage >= 10 || top5Percentage >= 30) {
-    return {
-      level: 'MODERATE RISK',
-      color: 'text-yellow-500',
-      message: 'Moderate concentration detected',
-      warning: `• ${holderStats}`
-    };
-  } else if (devPercentage >= 5 || top5Percentage >= 20) {
-    return {
-      level: 'ELEVATED RISK',
-      color: 'text-yellow-400',
-      message: 'Slightly elevated concentration',
-      warning: `• ${holderStats}`
-    };
-  } else if (devPercentage >= 2 || top5Percentage >= 15) {
-    return {
-      level: 'GUARDED RISK',
-      color: 'text-blue-400',
-      message: 'Low centralization risks, but remain vigilant',
-      warning: `• ${holderStats}`
+      level: "ERROR",
+      color: "text-red-600",
+      message: "No holder data available",
+      warning: "Error calculating risk level"
     };
   }
 
-  return {
-    level: 'LOW RISK',
-    color: 'text-green-500',
-    message: 'Well distributed token',
-    warning: `• ${holderStats}`
-  };
-}
-
-// Add this function near your other fetch functions
-const fetchDevTokenHoldings = async (creatorId: string, tokenId: string) => {
-  try {
-    const response = await fetchWithRetry(
-      `${API_BASE_URL}/user/${creatorId}/tokens`
-    );
-    const data = await response.json();
-    const tokenHolding = data.data?.find(item => item.token.id === tokenId);
-    return tokenHolding?.balance || 0;
-  } catch (error) {
-    console.error('Error fetching dev holdings:', error);
-    return null;
-  }
-};
-
-// Update calculateRiskLevel to use processHolderData
-const calculateRiskLevel = async (token: Token) => {
-  const dangers: string[] = [];
-  let hasMultipleTokens = false;
-  
-  // Get holder data
-  const holders = await fetchTokenHolders(token.id);
-  if (!holders) {
-    return {
-      level: 'UNKNOWN',
-      color: 'text-gray-500',
-      message: 'No holder data',
-      warning: 'No data available'
-    };
-  }
-
-  // Calculate percentages
-  const totalSupply = Number(token.total_supply);
-  
-  // Check if dev exists in holders list and get their holdings
+  // Find developer's holdings
   const devHolder = holders.find(h => h.user === token.creator);
-  const devHoldings = devHolder ? Number(devHolder.balance) : 0;
-  const devPercentage = (devHoldings / totalSupply) * 100;
+  const devHoldings = devHolder ? Number(devHolder.balance) / 1e11 : 0;
+  const totalSupplyNum = Number(token.total_supply) / 1e11;
+  const devPercentage = (devHoldings / totalSupplyNum) * 100;
+
+  // Sort holders by balance for top holder calculations
+  const sortedHolders = [...holders].sort((a, b) => Number(b.balance) - Number(a.balance));
+  const top5Holdings = sortedHolders.slice(0, 5).reduce((sum, h) => sum + Number(h.balance) / 1e11, 0);
+  const top10Holdings = sortedHolders.slice(0, 10).reduce((sum, h) => sum + Number(h.balance) / 1e11, 0);
+  
+  const top5Percentage = (top5Holdings / totalSupplyNum) * 100;
+  const top10Percentage = (top10Holdings / totalSupplyNum) * 100;
+
+  // Build concise warning message
+  const holderStats = [
+    `Dev: ${devPercentage.toFixed(2)}%`,
+    `Top 5: ${top5Percentage.toFixed(2)}%`,
+    `Top 10: ${top10Percentage.toFixed(2)}%`
+  ].join(' | ');
+
+  let warnings = [];
+  let isExtremeRisk = false;
 
   // Check if dev has sold position
-  if (!devHolder || devHoldings === 0) {
-    dangers.push('Developer has sold their entire position');
+  if (devHoldings <= 0 || isNaN(devHoldings)) {
+    warnings.push("Developer has sold their entire position");
+    isExtremeRisk = true;
   }
 
-  // Check for multiple tokens
+  // Check for multiple tokens by developer and their selling patterns
   if (!TRUSTED_DEVELOPERS.includes(token.creator)) {
     try {
       const creatorTokens = await fetchCreatorTokens(token.creator);
       if (creatorTokens && creatorTokens.length > 1) {
-        dangers.push(`Developer has created ${creatorTokens.length} tokens`);
-        hasMultipleTokens = true;
+        // Check selling patterns for all tokens
+        let soldTokensCount = 0;
+        const last24Hours = Date.now() - (24 * 60 * 60 * 1000);
+
+        for (const creatorToken of creatorTokens) {
+          const tradingAnalysis = await analyzeDevTrading(token.creator, creatorToken.id);
+          if (tradingAnalysis.hasSoldAndRebought && 
+              new Date(creatorToken.last_sell_time).getTime() > last24Hours) {
+            soldTokensCount++;
+          }
+        }
+
+        warnings.push(`Developer has created ${creatorTokens.length} tokens`);
+        
+        if (soldTokensCount > 1) {
+          warnings.push(`Developer has sold multiple tokens within 24h`);
+        }
+        
+        isExtremeRisk = true;
       }
     } catch (error) {
       console.error('Error checking creator tokens:', error);
     }
   }
 
-  const sortedHolders = [...holders].sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0));
-  const top5Holdings = sortedHolders.slice(0, 5).reduce((sum, h) => sum + Number(h.balance || 0), 0);
-  const top10Holdings = sortedHolders.slice(0, 10).reduce((sum, h) => sum + Number(h.balance || 0), 0);
-  
-  const top5Percentage = (top5Holdings / totalSupply) * 100;
-  const top10Percentage = (top10Holdings / totalSupply) * 100;
-
-  const holderStats = `Dev: ${devPercentage.toFixed(0)}% • Top 5: ${top5Percentage.toFixed(0)}% • Top 10: ${top10Percentage.toFixed(0)}%`;
-  const warningMessage = `${holderStats}${dangers.length ? ' • ' + dangers.join(' • ') : ''}`;
-
-  // If there are any dangers (dev sold or multiple tokens), return HIGH RISK
-  if (dangers.length > 0) {
+  // If either extreme risk condition is met, show combined warnings
+  if (isExtremeRisk) {
     return {
-      level: 'HIGH RISK',
-      color: 'text-orange-500',
-      message: 'Multiple high risk factors detected',
-      warning: warningMessage
+      level: "EXTREME RISK",
+      color: "text-red-600",
+      message: "Multiple high-risk factors detected - Extreme risk of abandonment",
+      warning: `DANGER: ${warnings.join(" & ")}`
     };
   }
 
-  // Base risk level determination
+  // Regular risk level checks
   if (devPercentage >= 50 || top5Percentage >= 70) {
     return {
-      level: 'EXTREME RISK',
-      color: 'text-red-600',
-      message: 'Extremely high centralization',
-      warning: warningMessage
+      level: "EXTREME RISK",
+      color: "text-red-600",
+      message: "Extremely high centralization. High probability of price manipulation.",
+      warning: holderStats
     };
   } else if (devPercentage >= 30 || top5Percentage >= 50) {
     return {
-      level: 'VERY HIGH RISK',
-      color: 'text-red-500',
-      message: 'Very high centralization',
-      warning: warningMessage
+      level: "VERY HIGH RISK",
+      color: "text-red-500",
+      message: "Very high centralization detected. Major price manipulation risk.",
+      warning: holderStats
     };
   } else if (devPercentage >= 20 || top5Percentage >= 40) {
     return {
-      level: 'HIGH RISK',
-      color: 'text-orange-500',
-      message: 'High concentration',
-      warning: warningMessage
+      level: "HIGH RISK",
+      color: "text-orange-500",
+      message: "High holder concentration. Exercise extreme caution.",
+      warning: holderStats
     };
   } else if (devPercentage >= 10 || top5Percentage >= 30) {
     return {
-      level: 'MODERATE RISK',
-      color: 'text-yellow-500',
-      message: 'Moderate concentration',
-      warning: warningMessage
+      level: "MODERATE RISK",
+      color: "text-yellow-500",
+      message: "Standard market risks apply. Trade carefully.",
+      warning: holderStats
     };
   } else if (devPercentage >= 5 || top5Percentage >= 20) {
     return {
-      level: 'ELEVATED RISK',
-      color: 'text-yellow-400',
-      message: 'Slightly elevated risk',
-      warning: warningMessage
-    };
-  } else if (devPercentage >= 2 || top5Percentage >= 10) {
-    return {
-      level: 'GUARDED RISK',
-      color: 'text-blue-400',
-      message: 'Low concentration',
-      warning: warningMessage
+      level: "LOW RISK",
+      color: "text-green-400",
+      message: "Well distributed token supply",
+      warning: holderStats
     };
   }
 
   return {
-    level: 'LOW RISK',
-    color: 'text-green-500',
-    message: 'Well distributed',
-    warning: warningMessage
+    level: "SAFE",
+    color: "text-green-500",
+    message: "Very well distributed",
+    warning: holderStats
   };
-};
+}
 
 const API_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
@@ -389,7 +355,7 @@ const setCachedHolders = (tokenId: string, holders: any) => {
   }));
 };
 
-// Update getTokens function
+// Update getTokens function to use batched endpoint
 async function getTokens(): Promise<Token[]> {
   const maxRetries = 3;
   const backoffDelay = 1000;
@@ -402,26 +368,18 @@ async function getTokens(): Promise<Token[]> {
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      const randomUserAgent = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${
-        Math.floor(Math.random() * 20 + 100)
-      }.0.0.0 Safari/537.36`;
+      const headers: HeadersInit = {
+        'Accept': 'application/json',
+        'x-api-key': API_KEY
+      };
 
       const response = await fetch(
-        'https://api.odin.fun/v1/tokens?sort=created_time:desc&page=1&limit=20',
+        `${API_BASE_URL}/tokens?sort=created_time:desc&page=1&limit=20`,
         {
-          headers: {
-            ...API_HEADERS,
-            'User-Agent': randomUserAgent,
-          },
+          headers,
           cache: 'no-store'
         }
       );
-
-      if (response.status === 429 || response.status === 403) {
-        console.log(`Rate limited (attempt ${attempt + 1}/${maxRetries}), waiting...`);
-        await sleep(backoffDelay * Math.pow(2, attempt));
-        continue;
-      }
 
       if (!response.ok) {
         throw new Error(`API response not ok: ${response.status}`);
@@ -441,7 +399,6 @@ async function getTokens(): Promise<Token[]> {
       console.error(`Attempt ${attempt + 1}/${maxRetries} failed:`, error);
       
       if (attempt === maxRetries - 1) {
-        // On last attempt, try to use cached data
         const cachedTokens = getCachedTokens();
         if (cachedTokens) {
           console.log('Using cached tokens due to API failure');
@@ -457,46 +414,136 @@ async function getTokens(): Promise<Token[]> {
   return [];
 }
 
-// Add these helper functions at the top of the file
-const CREATOR_TOKENS_CACHE_KEY = (creatorId: string) => `creator_tokens_${creatorId}`;
-const CREATOR_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+// Update the fetchTokenHolders function
+const fetchTokenHolders = async (tokenIds: string | string[], creatorId: string) => {
+  try {
+    const ids = Array.isArray(tokenIds) ? tokenIds : [tokenIds];
+    
+    const response = await fetch(
+      `${API_BASE_URL}/api/batch-holders?tokenIds=${JSON.stringify(ids)}`,
+      {
+        headers: {
+          'x-api-key': API_KEY
+        }
+      }
+    );
 
-const getCachedCreatorTokens = (creatorId: string) => {
-  if (typeof window === 'undefined') return null;
-  const cached = localStorage.getItem(CREATOR_TOKENS_CACHE_KEY(creatorId));
-  if (!cached) return null;
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
 
-  const { data, timestamp } = JSON.parse(cached);
-  if (Date.now() - timestamp > CREATOR_CACHE_DURATION) {
-    localStorage.removeItem(CREATOR_TOKENS_CACHE_KEY(creatorId));
-    return null;
+    const holdersMap = await response.json();
+    
+    Object.entries(holdersMap).forEach(([tokenId, holdersData]) => {
+      const holdersArray = Array.isArray(holdersData?.data) ? holdersData.data : [];
+      
+      // Normalize creatorId and holder addresses for comparison
+      const normalizedCreatorId = creatorId.toLowerCase().trim();
+      
+      // Find the creator's holdings with normalized comparison
+      const creatorHoldings = holdersArray.find(h => 
+        h.user.toLowerCase().trim() === normalizedCreatorId
+      );
+      
+      const devHoldings = creatorHoldings?.balance || 0;
+      
+      holdersMap[tokenId] = {
+        data: holdersArray,
+        devHoldings: Number(devHoldings)
+      };
+      
+      setCachedHolders(tokenId, holdersArray);
+    });
+    
+    return holdersMap;
+  } catch (error) {
+    console.error('Error fetching holders:', error);
+    return {};
   }
-  return data;
 };
 
-const setCachedCreatorTokens = (creatorId: string, tokens: any[]) => {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(CREATOR_TOKENS_CACHE_KEY(creatorId), JSON.stringify({
-    data: tokens,
-    timestamp: Date.now()
-  }));
-};
+// First, define the cache key constant
+const USER_CREATED_CACHE_KEY = 'user_created_tokens';
 
 // Update the fetchCreatorTokens function
-const fetchCreatorTokens = async (creatorId: string) => {
-  const url = `${API_BASE_URL}/user/${creatorId}/created?sort=last_action_time%3Adesc&page=1&limit=999999`;
-  const tokens = await fetchWithRetry(url);
-  return tokens || [];
+async function fetchCreatorTokens(creatorId: string) {
+  try {
+    const response = await fetch(`https://odin-smash-server.onrender.com/api/user/${creatorId}/created`, {
+      headers: {
+        'Accept': 'application/json',
+        'x-api-key': API_KEY || '', // Add the API key from env
+      }
+    });
+    
+    if (!response.ok) {
+      console.warn(`Failed to fetch tokens for creator ${creatorId}: ${response.status}`);
+      return [];
+    }
+    const responseData = await response.json();
+    return responseData.data || []; // Return the data array or empty array if not found
+  } catch (error) {
+    console.error('Error fetching creator tokens:', error);
+    return []; // Return empty array instead of throwing
+  }
+}
+
+// Update the fetchBatchTokenData function
+const fetchBatchTokenData = async (tokenIds: string[]): Promise<Token[]> => {
+  try {
+    if (!tokenIds || tokenIds.length === 0) return [];
+
+    const response = await fetch(
+      `${API_BASE_URL}/batch-tokens?tokenIds=${JSON.stringify(tokenIds)}`,
+      {
+        headers: {
+          'Accept': 'application/json',
+          ...(API_KEY ? { 'x-api-key': API_KEY } : {})
+        }
+      }
+    );
+
+    if (!response.ok) {
+      // If the batch endpoint fails, fall back to individual requests
+      console.warn('Batch API failed, falling back to individual requests');
+      const individualPromises = tokenIds.map(tokenId => 
+        fetchWithRetry(`/token/${tokenId}`)
+      );
+      const results = await Promise.all(individualPromises);
+      return results.filter(token => token !== null);
+    }
+
+    const data = await response.json();
+    return data.filter(token => token !== null);
+  } catch (error) {
+    console.error('Batch token fetch error:', error);
+    return [];
+  }
 };
 
-const fetchTokenHolders = async (tokenId: string) => {
-  const url = `${API_BASE_URL}/token/${tokenId}/owners`;
-  const holders = await fetchWithRetry(url);
-  return holders || [];
+// Update the fetchBatchCreatorTokens function to use the correct endpoint
+const fetchBatchCreatorTokens = async (creatorIds: string[]) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/batch-creators`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ creatorIds }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Batch creator tokens fetch error:', error);
+    throw error;
+  }
 };
 
 const analyzeDevTrading = async (creatorId: string, tokenId: string) => {
-  const url = `${API_BASE_URL}/user/${creatorId}/activity?page=1&limit=100&sort=time%3Adesc`;
+  const url = `/user/${creatorId}/activity?page=1&limit=100&sort=time%3Adesc`;
   const data = await fetchWithRetry(url);
   
   if (!data) {
@@ -621,6 +668,161 @@ const TokenListSkeleton = () => {
   );
 };
 
+// Add this cleanup function
+const cleanupRequestQueue = () => {
+  requestQueue = [];
+  isProcessingQueue = false;
+};
+
+// Update the TokenCard component
+const TokenCard = ({ token }: { token: Token }) => {
+  const [risk, setRisk] = useState<RiskAssessment | null>(null);
+  const [holders, setHolders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch holders data
+        const holdersData = await fetchTokenHolders(token.id, token.creator);
+        const holdersArray = holdersData[token.id]?.data || [];
+        setHolders(holdersArray);
+
+        // Process risk assessment
+        const riskAssessment = await processHolderData(holdersArray, token);
+        setRisk(riskAssessment);
+      } catch (error) {
+        console.error('Error loading token data:', error);
+        // Set default risk assessment on error
+        setRisk({
+          level: "ERROR",
+          color: "text-red-600",
+          message: "Error loading data",
+          warning: "Error calculating risk level"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadData();
+  }, [token]);
+
+  if (loading) {
+    return (
+      <div className="p-3 sm:p-4 bg-card hover:bg-card/80 rounded-lg border border-border animate-pulse">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-lg bg-gray-700" />
+          <div className="flex-1">
+            <div className="h-5 w-32 bg-gray-700 rounded mb-2" />
+            <div className="h-4 w-48 bg-gray-700 rounded" />
+          </div>
+          <div className="text-right">
+            <div className="h-5 w-20 bg-gray-700 rounded mb-1" />
+            <div className="h-4 w-16 bg-gray-700 rounded" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="block p-3 sm:p-4 bg-card hover:bg-card/80 rounded-lg border border-border">
+      <div className="flex items-center gap-3">
+        <Link
+          key={token.id}
+          href={`/results?search=${token.id}`}
+          className="flex-1 flex items-center gap-3"
+        >
+          <img 
+            src={`https://images.odin.fun/token/${token.id}`}
+            alt={token.name}
+            className="w-12 h-12 rounded-lg object-cover"
+          />
+          <div className="flex-1">
+            <div className="flex items-center flex-wrap gap-2">
+              <h2 className="font-medium">
+                {token.name} ({token.ticker})
+              </h2>
+              <span className={`text-xs px-2 py-0.5 rounded ${risk?.color}`}>
+                {risk?.level}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {risk?.warning}
+            </p>
+          </div>
+        </Link>
+        
+        <div className="text-right">
+          <p className="font-medium">
+            {formatPrice(token.price || 0)}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {token.holder_count} holders
+          </p>
+          <div className="flex items-center gap-2 justify-end mt-1">
+            {token.website && (
+              <a
+                href={token.website}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-muted-foreground hover:text-primary"
+              >
+                <Globe className="h-3 w-3" />
+              </a>
+            )}
+            {token.twitter && (
+              <a
+                href={token.twitter}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-muted-foreground hover:text-primary"
+              >
+                <svg 
+                  width="12" 
+                  height="12" 
+                  viewBox="0 0 1200 1227" 
+                  fill="none" 
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="transition-colors hover:text-primary"
+                >
+                  <path 
+                    d="M714.163 519.284L1160.89 0H1055.03L667.137 450.887L357.328 0H0L468.492 681.821L0 1226.37H105.866L515.491 750.218L842.672 1226.37H1200L714.137 519.284H714.163ZM569.165 687.828L521.697 619.934L144.011 79.6944H306.615L611.412 515.685L658.88 583.579L1055.08 1150.3H892.476L569.165 687.854V687.828Z" 
+                    fill="currentColor"
+                  />
+                </svg>
+              </a>
+            )}
+            {token.telegram && (
+              <a
+                href={token.telegram}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-muted-foreground hover:text-primary"
+              >
+                <Send className="h-3 w-3" />
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const fetchCreatorBalance = async (creatorId: string) => {
+  try {
+    const response = await fetchWithRetry(`/user/${creatorId}/balance`);
+    return response?.balance || 0;
+  } catch (error) {
+    console.error('Error fetching creator balance:', error);
+    return 0;
+  }
+};
+
 export default function TokensPage() {
   const [tokens, setTokens] = useState<Token[]>([]);
   const [sortBy, setSortBy] = useState<SortOption>('newest');
@@ -630,6 +832,8 @@ export default function TokensPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
+
     const loadTokens = async () => {
       setLoading(true);
       setError(null);
@@ -646,6 +850,10 @@ export default function TokensPage() {
         const freshTokens = await getTokens();
         if (freshTokens.length > 0) {
           setTokens(freshTokens);
+          
+          // Prefetch holders for ALL tokens in a single batch
+          const tokenIds = freshTokens.map(t => t.id);
+          await fetchTokenHolders(tokenIds, freshTokens[0].creator);
         } else if (!cachedData) {
           setError('Unable to fetch tokens. Please try again later.');
         }
@@ -661,9 +869,12 @@ export default function TokensPage() {
 
     loadTokens();
 
-    // Set up periodic refresh
-    const interval = setInterval(loadTokens, 30000); // Refresh every 30 seconds
-    return () => clearInterval(interval);
+    const interval = setInterval(loadTokens, 30000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+      cleanupRequestQueue();
+    };
   }, []);
 
   // Filter and sort tokens
@@ -680,21 +891,9 @@ export default function TokensPage() {
 
     // Apply risk filter
     if (riskFilter !== 'all') {
-      result = result.filter(token => {
-        const risk = calculateRiskLevel(token);
-        switch (riskFilter) {
-          case 'low':
-            return risk.level === "LOW RISK" || risk.level === "GUARDED RISK";
-          case 'moderate':
-            return risk.level === "MODERATE RISK" || risk.level === "ELEVATED RISK";
-          case 'high':
-            return risk.level === "HIGH RISK" || risk.level === "VERY HIGH RISK";
-          case 'extreme':
-            return risk.level === "EXTREME RISK";
-          default:
-            return true;
-        }
-      });
+      // Remove risk filter for now since processHolderData is async
+      // You might want to handle this differently, perhaps with a useEffect
+      console.log('Risk filtering temporarily disabled due to async nature');
     }
 
     // Apply sorting
@@ -791,46 +990,9 @@ export default function TokensPage() {
           ) : error && !tokens.length ? (
             <div className="text-center py-8 text-red-500">{error}</div>
           ) : filteredTokens.length > 0 ? (
-            filteredTokens.map(async (token) => {
-              const risk = await calculateRiskLevel(token);
-              
-              return (
-                <Link
-                  key={token.id}
-                  href={`/results?search=${token.id}`}
-                  className="block p-3 sm:p-4 bg-card hover:bg-card/80 rounded-lg border border-border"
-                >
-                  <div className="flex items-center gap-3">
-                    <img 
-                      src={`https://images.odin.fun/token/${token.id}`}
-                      alt={token.name}
-                      className="w-12 h-12 rounded-lg object-cover"
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-center flex-wrap gap-2">
-                        <h2 className="font-medium">
-                          {token.name} ({token.ticker})
-                        </h2>
-                        <span className={`text-xs px-2 py-0.5 rounded ${risk.color}`}>
-                          {risk.level}
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {risk.warning}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium">
-                        {formatPrice(token.price || 0)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {token.holder_count} holders
-                      </p>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })
+            filteredTokens.map(token => (
+              <TokenCard key={token.id} token={token} />
+            ))
           ) : (
             <div className="text-center py-8">No tokens found</div>
           )}
