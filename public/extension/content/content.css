@@ -1,0 +1,116 @@
+.odinsmash-card {
+    background: #1a1b1e;
+    border: 1px solid #2d2e32;
+    border-radius: 8px;
+    padding: 16px;
+    margin: 16px 0;
+    color: #ffffff;
+  }
+  
+  .odinsmash-card h3 {
+    margin: 0 0 12px 0;
+    color: #ffffff;
+    font-size: 18px;
+  }
+  
+  .risk-level {
+    font-weight: bold;
+    padding: 8px;
+    border-radius: 4px;
+    margin-bottom: 12px;
+  }
+  
+  .text-red-600 { color: #dc2626; }
+  .text-red-500 { color: #ef4444; }
+  .text-orange-500 { color: #f97316; }
+  .text-yellow-500 { color: #eab308; }
+  .text-green-500 { color: #22c55e; }
+  
+  .analysis-details {
+    font-size: 14px;
+    line-height: 1.5;
+    color: #e5e7eb;
+  }
+
+.odinsmash-analysis {
+    margin: 16px 0;
+    padding: 16px;
+    background: rgba(0,0,0,0.8);
+    border: 1px solid #333;
+    border-radius: 8px;
+    font-family: monospace;
+}
+
+.analysis-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.risk-level {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 8px;
+}
+
+.risk-message {
+    font-size: 14px;
+    color: #9ca3af;
+    margin-bottom: 16px;
+}
+
+.risk-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.stat-card {
+    background: rgba(26, 27, 30, 0.6);
+    padding: 12px;
+    border-radius: 6px;
+}
+
+.stat-label {
+    font-size: 12px;
+    color: #9ca3af;
+}
+
+.stat-value {
+    font-size: 14px;
+    font-weight: 500;
+    margin-top: 4px;
+}
+
+.odinsmash-indicator {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  padding: 8px 12px;
+  background: #00ffea;
+  color: black;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 12px;
+  z-index: 9999;
+}
+
+.odinsmash-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.odinsmash-stat-label {
+  color: #666;
+  font-size: 12px;
+}
+
+.odinsmash-stat-value {
+  color: white;
+  font-size: 14px;
+  margin-top: 4px;
+}

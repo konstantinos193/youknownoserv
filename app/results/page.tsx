@@ -733,6 +733,9 @@ const Header = () => (
           <Link href="/tokens" className="text-muted-foreground hover:text-foreground">
             TOKENS
           </Link>
+          <Link href="/extension" className="text-muted-foreground hover:text-foreground">
+            EXTENSION
+          </Link>
         </nav>
       </div>
     </div>

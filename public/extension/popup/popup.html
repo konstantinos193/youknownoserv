@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ODIN Token Checker</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="app-container">
+    <canvas id="background-canvas"></canvas>
+    
+    <header>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <img src="../icons/icon128.png" alt="OdinSmash Logo" style="width: 24px; height: 24px; object-fit: contain;">
+        <h1>ODINSMASH</h1>
+      </div>
+      <div class="nav-tabs">
+        <button class="tab active" data-tab="check">CHECK</button>
+        <button class="tab" data-tab="recent">RECENT</button>
+      </div>
+    </header>
+    
+    <main>
+      <div class="tab-content active" id="check-tab">
+        <div class="terminal-card">
+          <h2>Token Analysis</h2>
+          <form id="check-form">
+            <div class="input-group">
+              <input type="text" id="token-url" placeholder="https://odin.fun/token/..." required>
+              <button type="submit" class="icon-button">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              </button>
+            </div>
+          </form>
+          
+          <div class="quick-tokens">
+            <h3>Popular Tokens</h3>
+            <div class="token-list">
+              <button class="token-item" data-token="ODIN">ODIN</button>
+              <button class="token-item" data-token="ODINFROG">ODINFROG</button>
+              <button class="token-item" data-token="CATS">CATS</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="tab-content" id="recent-tab">
+        <div class="terminal-card">
+          <h2>Recent Checks</h2>
+          <div id="recent-list" class="recent-list">
+            <!-- Will be populated by JavaScript -->
+            <div class="empty-state">No recent checks</div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="tab-content" id="result-tab">
+        <div class="terminal-card">
+          <div class="result-header">
+            <button id="back-button" class="icon-button">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+            </button>
+            <h2 id="token-name">Token Name</h2>
+          </div>
+          
+          <div class="odinsmash-analysis">
+            <div style="padding: 20px; background: rgba(26, 27, 30, 0.8); border: 1px solid #2d2e32; border-radius: 8px;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+                <img src="../icons/icon128.png" style="width: 24px; height: 24px;">
+                <span style="font-size: 16px; font-weight: 600; color: #ffffff;">OdinSmash Analysis</span>
+              </div>
+
+              <div id="risk-indicator" style="background: #eab30820; padding: 8px 12px; border-radius: 6px; margin-bottom: 16px;">
+                <span id="risk-level" style="color: #eab308; font-weight: 500;">ANALYZING...</span>
+                <p id="risk-message" style="color: #9ca3af; font-size: 12px; margin-top: 4px;">Analyzing token data...</p>
+              </div>
+
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+                <div style="background: rgba(26, 27, 30, 0.6); padding: 12px; border-radius: 6px;">
+                  <div style="color: #9ca3af; font-size: 12px;">Holders</div>
+                  <div id="holder-count" style="color: #ffffff; font-size: 14px; margin-top: 4px;">-</div>
+                </div>
+                <div style="background: rgba(26, 27, 30, 0.6); padding: 12px; border-radius: 6px;">
+                  <div style="color: #9ca3af; font-size: 12px;">Market Cap</div>
+                  <div id="market-cap" style="color: #ffffff; font-size: 14px; margin-top: 4px;">-</div>
+                </div>
+                <div style="background: rgba(26, 27, 30, 0.6); padding: 12px; border-radius: 6px;">
+                  <div style="color: #9ca3af; font-size: 12px;">Volume 24h</div>
+                  <div id="volume-24h" style="color: #ffffff; font-size: 14px; margin-top: 4px;">-</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="action-buttons">
+            <a id="view-website" href="#" target="_blank" class="button primary">View on Website</a>
+            <button id="share-button" class="button secondary">Share Result</button>
+          </div>
+        </div>
+      </div>
+    </main>
+    
+    <footer>
+      <p>© 2025 ODINSMASH</p>
+    </footer>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
