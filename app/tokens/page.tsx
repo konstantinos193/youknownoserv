@@ -823,6 +823,84 @@ const fetchCreatorBalance = async (creatorId: string) => {
   }
 };
 
+const filterAndSortTokens = (tokensToFilter: Token[]) => {
+  let result = [...tokensToFilter];
+
+  // Apply search filter
+  if (searchQuery) {
+    result = result.filter(token => 
+      token.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      token.ticker.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }
+
+  // Apply risk filter
+  if (riskFilter !== 'all') {
+    result = result.filter(async token => {
+      try {
+        // Get holders data
+        const holdersData = await fetchTokenHolders(token.id, token.creator);
+        const holders = holdersData[token.id]?.data || [];
+        
+        // Calculate percentages
+        const devHolder = holders.find(h => h.user === token.creator);
+        const devHoldings = devHolder ? Number(devHolder.balance) / 1e11 : 0;
+        const totalSupplyNum = Number(token.total_supply) / 1e11;
+        const devPercentage = (devHoldings / totalSupplyNum) * 100;
+
+        // Sort holders by balance
+        const sortedHolders = [...holders].sort((a, b) => Number(b.balance) - Number(a.balance));
+        const top5Holdings = sortedHolders.slice(0, 5).reduce((sum, h) => sum + Number(h.balance) / 1e11, 0);
+        const top5Percentage = (top5Holdings / totalSupplyNum) * 100;
+
+        // Return based on risk filter
+        switch (riskFilter) {
+          case 'extreme':
+            return devPercentage >= 50 || top5Percentage >= 70;
+          case 'very_high':
+            return (devPercentage >= 30 && devPercentage < 50) || (top5Percentage >= 50 && top5Percentage < 70);
+          case 'high':
+            return (devPercentage >= 20 && devPercentage < 30) || (top5Percentage >= 40 && top5Percentage < 50);
+          case 'moderate':
+            return (devPercentage >= 10 && devPercentage < 20) || (top5Percentage >= 30 && top5Percentage < 40);
+          case 'elevated':
+            return (devPercentage >= 5 && devPercentage < 10) || (top5Percentage >= 20 && top5Percentage < 30);
+          case 'guarded':
+            return (devPercentage >= 2 && devPercentage < 5) || (top5Percentage >= 10 && top5Percentage < 20);
+          case 'low':
+            return devPercentage < 2 && top5Percentage < 10;
+          default:
+            return true;
+        }
+      } catch (error) {
+        console.error('Error processing token risk:', error);
+        return false;
+      }
+    });
+  }
+
+  // Apply sorting
+  result.sort((a, b) => {
+    switch (sortBy) {
+      case 'oldest':
+        return new Date(a.created_time).getTime() - new Date(b.created_time).getTime();
+      case 'price_high':
+        return (b.price || 0) - (a.price || 0);
+      case 'price_low':
+        return (a.price || 0) - (b.price || 0);
+      case 'holders_high':
+        return (b.holder_count || 0) - (a.holder_count || 0);
+      case 'holders_low':
+        return (a.holder_count || 0) - (b.holder_count || 0);
+      default: // newest
+        return new Date(b.created_time).getTime() - new Date(a.created_time).getTime();
+    }
+  });
+
+  return result;
+};
+
+// Update the component to handle async filtering
 export default function TokensPage() {
   const [tokens, setTokens] = useState<Token[]>([]);
   const [sortBy, setSortBy] = useState<SortOption>('newest');
@@ -830,6 +908,7 @@ export default function TokensPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [filteredTokens, setFilteredTokens] = useState<Token[]>([]);
 
   useEffect(() => {
     let isMounted = true;
@@ -877,74 +956,15 @@ export default function TokensPage() {
     };
   }, []);
 
-  // Filter and sort tokens
-  const filterAndSortTokens = (tokensToFilter: Token[]) => {
-    let result = [...tokensToFilter];
-
-    // Apply search filter
-    if (searchQuery) {
-      result = result.filter(token => 
-        token.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        token.ticker.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-
-    // Apply risk filter
-    if (riskFilter !== 'all') {
-      result = result.filter(token => {
-        const devHolder = token.holders?.find(h => h.user === token.creator);
-        const devHoldings = devHolder ? Number(devHolder.balance) / 1e11 : 0;
-        const totalSupplyNum = Number(token.total_supply) / 1e11;
-        const devPercentage = (devHoldings / totalSupplyNum) * 100;
-
-        const sortedHolders = [...(token.holders || [])].sort((a, b) => Number(b.balance) - Number(a.balance));
-        const top5Holdings = sortedHolders.slice(0, 5).reduce((sum, h) => sum + Number(h.balance) / 1e11, 0);
-        const top5Percentage = (top5Holdings / totalSupplyNum) * 100;
-
-        switch (riskFilter) {
-          case 'extreme':
-            return devPercentage >= 50 || top5Percentage >= 70;
-          case 'very_high':
-            return (devPercentage >= 30 && devPercentage < 50) || (top5Percentage >= 50 && top5Percentage < 70);
-          case 'high':
-            return (devPercentage >= 20 && devPercentage < 30) || (top5Percentage >= 40 && top5Percentage < 50);
-          case 'moderate':
-            return (devPercentage >= 10 && devPercentage < 20) || (top5Percentage >= 30 && top5Percentage < 40);
-          case 'elevated':
-            return (devPercentage >= 5 && devPercentage < 10) || (top5Percentage >= 20 && top5Percentage < 30);
-          case 'guarded':
-            return (devPercentage >= 2 && devPercentage < 5) || (top5Percentage >= 10 && top5Percentage < 20);
-          case 'low':
-            return devPercentage < 2 && top5Percentage < 10;
-          default:
-            return true;
-        }
-      });
-    }
-
-    // Apply sorting
-    result.sort((a, b) => {
-      switch (sortBy) {
-        case 'oldest':
-          return new Date(a.created_time).getTime() - new Date(b.created_time).getTime();
-        case 'price_high':
-          return (b.price || 0) - (a.price || 0);
-        case 'price_low':
-          return (a.price || 0) - (b.price || 0);
-        case 'holders_high':
-          return (b.holder_count || 0) - (a.holder_count || 0);
-        case 'holders_low':
-          return (a.holder_count || 0) - (b.holder_count || 0);
-        default: // newest
-          return new Date(b.created_time).getTime() - new Date(a.created_time).getTime();
-      }
-    });
-
-    return result;
-  };
-
-  // Get filtered and sorted tokens
-  const filteredTokens = filterAndSortTokens(tokens);
+  // Move filtering logic to useEffect
+  useEffect(() => {
+    const filterTokens = async () => {
+      const filtered = await filterAndSortTokens(tokens);
+      setFilteredTokens(filtered);
+    };
+    
+    filterTokens();
+  }, [tokens, riskFilter, sortBy, searchQuery]);
 
   return (
     <div className="container px-2 sm:px-4 py-4 sm:py-8">
