@@ -886,44 +886,28 @@ export default function TokensPage() {
   const filterAndSortTokens = useCallback(async (tokensToFilter: Token[]) => {
     let result = [...tokensToFilter];
 
-    // Apply search filter
+    // Apply search filter first
     if (searchQuery) {
+      const query = searchQuery.toLowerCase();
       result = result.filter(token => 
-        token.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        token.ticker.toLowerCase().includes(searchQuery.toLowerCase())
+        token.name.toLowerCase().includes(query) ||
+        token.ticker.toLowerCase().includes(query) ||
+        token.id.toLowerCase().includes(query)
       );
     }
 
-    // Apply sorting first
-    result.sort((a, b) => {
-      switch (sortBy) {
-        case 'oldest':
-          return new Date(a.created_time).getTime() - new Date(b.created_time).getTime();
-        case 'price_high':
-          return (b.price || 0) - (a.price || 0);
-        case 'price_low':
-          return (a.price || 0) - (b.price || 0);
-        case 'holders_high':
-          return (b.holder_count || 0) - (a.holder_count || 0);
-        case 'holders_low':
-          return (a.holder_count || 0) - (b.holder_count || 0);
-        default: // newest
-          return new Date(b.created_time).getTime() - new Date(a.created_time).getTime();
-      }
-    });
+    // Apply risk filter if not 'all'
+    if (riskFilter !== 'all') {
+      // Get holders data for all tokens in a single batch
+      const tokenIds = result.map(t => t.id);
+      const holdersMap = await fetchTokenHolders(tokenIds, result[0]?.creator || '');
 
-    // If no risk filter, return sorted results
-    if (riskFilter === 'all') {
-      return result;
-    }
+      result = result.filter(token => {
+        // Check for rugged tokens first
+        if (token.holder_count === 0) {
+          return riskFilter === 'extreme';
+        }
 
-    // Get holders data for all tokens in a single batch
-    const tokenIds = result.map(t => t.id);
-    const holdersMap = await fetchTokenHolders(tokenIds, result[0]?.creator || '');
-
-    // Filter based on risk levels
-    return result.filter(token => {
-      try {
         const holders = holdersMap[token.id]?.data || [];
         const devHolder = holders.find(h => h.user === token.creator);
         const devHoldings = devHolder ? Number(devHolder.balance) / 1e11 : 0;
@@ -936,7 +920,7 @@ export default function TokensPage() {
 
         switch (riskFilter) {
           case 'extreme':
-            return devPercentage >= 50 || top5Percentage >= 70;
+            return devPercentage >= 50 || top5Percentage >= 70 || token.holder_count === 0;
           case 'very_high':
             return (devPercentage >= 30 && devPercentage < 50) || (top5Percentage >= 50 && top5Percentage < 70);
           case 'high':
@@ -952,11 +936,29 @@ export default function TokensPage() {
           default:
             return true;
         }
-      } catch (error) {
-        console.error('Error processing token risk:', error);
-        return false;
+      });
+    }
+
+    // Apply sorting
+    result.sort((a, b) => {
+      switch (sortBy) {
+        case 'oldest':
+          return new Date(a.created_time).getTime() - new Date(b.created_time).getTime();
+        case 'price_high':
+          return (b.price || 0) - (a.price || 0);
+        case 'price_low':
+          return (a.price || 0) - (b.price || 0);
+        case 'holders_high':
+          return (b.holder_count || 0) - (a.holder_count || 0);
+        case 'holders_low':
+          return (a.holder_count || 0) - (b.holder_count || 0);
+        case 'newest':
+        default:
+          return new Date(b.created_time).getTime() - new Date(a.created_time).getTime();
       }
     });
+
+    return result;
   }, [searchQuery, sortBy, riskFilter]);
 
   useEffect(() => {
@@ -1009,17 +1011,32 @@ export default function TokensPage() {
 
   // Update filtering effect
   useEffect(() => {
+    let isMounted = true;
+
     const filterTokens = async () => {
       try {
+        setLoading(true);
         const filtered = await filterAndSortTokens(tokens);
-        setFilteredTokens(filtered);
+        if (isMounted) {
+          setFilteredTokens(filtered);
+        }
       } catch (error) {
         console.error('Error filtering tokens:', error);
-        setFilteredTokens(tokens); // Fallback to unfiltered tokens
+        if (isMounted) {
+          setFilteredTokens(tokens); // Fallback to unfiltered tokens
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
     
     filterTokens();
+
+    return () => {
+      isMounted = false;
+    };
   }, [tokens, filterAndSortTokens]);
 
   return (
