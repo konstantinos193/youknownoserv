@@ -901,13 +901,19 @@ export default function TokensPage() {
     const holdersMap = await fetchTokenHolders(tokenIds, result[0]?.creator || '');
 
     // Helper function to determine risk level
-    const getRiskLevel = async (token: Token): Promise<string> => {
+    const getRiskLevel = (token: Token): string => {
       // Check for zero holders first
       if (token.holder_count === 0) return 'extreme';
 
       const holders = holdersMap[token.id]?.data || [];
+      
+      // Check if dev has sold entire position
       const devHolder = holders.find(h => h.user === token.creator);
-      const devHoldings = devHolder ? Number(devHolder.balance) / 1e11 : 0;
+      if (!devHolder || Number(devHolder.balance) <= 0) {
+        return 'extreme';
+      }
+
+      const devHoldings = Number(devHolder.balance) / 1e11;
       const totalSupplyNum = Number(token.total_supply) / 1e11;
       const devPercentage = (devHoldings / totalSupplyNum) * 100;
 
@@ -915,25 +921,29 @@ export default function TokensPage() {
       const top5Holdings = sortedHolders.slice(0, 5).reduce((sum, h) => sum + Number(h.balance) / 1e11, 0);
       const top5Percentage = (top5Holdings / totalSupplyNum) * 100;
 
-      // Determine risk level based on percentages
-      if (devPercentage < 2 && top5Percentage < 10) return 'low';
-      if (devPercentage < 5 && top5Percentage < 20) return 'guarded';
-      if (devPercentage < 10 && top5Percentage < 30) return 'elevated';
-      if (devPercentage < 20 && top5Percentage < 40) return 'moderate';
-      if (devPercentage < 30 && top5Percentage < 50) return 'high';
-      if (devPercentage < 50 && top5Percentage < 70) return 'very_high';
+      // Strict risk level checks from lowest to highest
+      if (devPercentage < 2 && top5Percentage < 10) {
+        return 'low';
+      } else if (devPercentage < 5 && top5Percentage < 20) {
+        return 'guarded';
+      } else if (devPercentage < 10 && top5Percentage < 30) {
+        return 'elevated';
+      } else if (devPercentage < 20 && top5Percentage < 40) {
+        return 'moderate';
+      } else if (devPercentage < 30 && top5Percentage < 50) {
+        return 'high';
+      } else if (devPercentage < 50 && top5Percentage < 70) {
+        return 'very_high';
+      }
       return 'extreme';
     };
 
-    // Filter and get risk levels for all tokens
-    const tokenRiskLevels = new Map();
-    await Promise.all(result.map(async (token) => {
-      tokenRiskLevels.set(token.id, await getRiskLevel(token));
-    }));
-
     // Filter based on risk level if not 'all'
     if (riskFilter !== 'all') {
-      result = result.filter(token => tokenRiskLevels.get(token.id) === riskFilter);
+      result = result.filter(token => {
+        const tokenRiskLevel = getRiskLevel(token);
+        return tokenRiskLevel === riskFilter;
+      });
     }
 
     // Apply sorting
@@ -948,13 +958,12 @@ export default function TokensPage() {
         'extreme': 6
       };
 
-      const riskA = riskLevels[tokenRiskLevels.get(a.id)];
-      const riskB = riskLevels[tokenRiskLevels.get(b.id)];
+      const riskA = getRiskLevel(a);
+      const riskB = getRiskLevel(b);
 
-      // If risk levels are different and we're filtering by risk,
-      // sort by risk level first
-      if (riskFilter !== 'all' && riskA !== riskB) {
-        return riskA - riskB;
+      // Sort by risk level first
+      if (riskA !== riskB) {
+        return riskLevels[riskA] - riskLevels[riskB];
       }
 
       // Then apply the selected sort criteria
