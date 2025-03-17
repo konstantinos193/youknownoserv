@@ -153,6 +153,10 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY;
 
+// Update the API_URL constant to use environment variable with fallback
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+// Update the fetchWithRetry function to include CORS headers
 const fetchWithRetry = async (url: string, options = {}) => {
   const maxRetries = 3;
   const backoffDelay = 1000;
@@ -170,7 +174,11 @@ const fetchWithRetry = async (url: string, options = {}) => {
           ...API_HEADERS,
           'User-Agent': randomUserAgent,
           'x-api-key': API_KEY || '',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         },
+        mode: 'cors',
         cache: 'no-store'
       });
 
@@ -197,9 +205,6 @@ const fetchWithRetry = async (url: string, options = {}) => {
 
   throw lastError || new Error('Max retries reached');
 };
-
-// First, add the API_URL constant at the top of the file
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 // Update the fetch functions to include the API key header
 const fetchWithAuth = async (url: string) => {
@@ -736,6 +741,9 @@ const Header = () => (
           <Link href="/extension" className="text-muted-foreground hover:text-foreground">
             EXTENSION
           </Link>
+          <Link href="/docs" className="text-muted-foreground hover:text-foreground">
+            DOCS
+          </Link>
         </nav>
       </div>
     </div>
@@ -1207,7 +1215,13 @@ export default function ResultsPage() {
         }
 
         const response = await fetch(`${API_URL}/api/token-data/${tokenId}`, {
-          headers: { 'x-api-key': API_KEY || '' }
+          headers: {
+            'x-api-key': API_KEY || '',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          credentials: 'include',
+          mode: 'cors'
         });
 
         if (!response.ok) {

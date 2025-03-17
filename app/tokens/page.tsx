@@ -614,7 +614,7 @@ const analyzeDevTrading = async (creatorId: string, tokenId: string) => {
 };
 
 type SortOption = 'newest' | 'oldest' | 'price_high' | 'price_low' | 'holders_high' | 'holders_low';
-type RiskFilter = 'all' | 'low' | 'moderate' | 'high' | 'extreme';
+type RiskFilter = 'all' | 'low' | 'guarded' | 'elevated' | 'moderate' | 'high' | 'very_high' | 'extreme';
 
 // First, add the formatPrice function at the top of the file
 const formatPrice = (price: number): string => {
@@ -891,9 +891,35 @@ export default function TokensPage() {
 
     // Apply risk filter
     if (riskFilter !== 'all') {
-      // Remove risk filter for now since processHolderData is async
-      // You might want to handle this differently, perhaps with a useEffect
-      console.log('Risk filtering temporarily disabled due to async nature');
+      result = result.filter(token => {
+        const devHolder = token.holders?.find(h => h.user === token.creator);
+        const devHoldings = devHolder ? Number(devHolder.balance) / 1e11 : 0;
+        const totalSupplyNum = Number(token.total_supply) / 1e11;
+        const devPercentage = (devHoldings / totalSupplyNum) * 100;
+
+        const sortedHolders = [...(token.holders || [])].sort((a, b) => Number(b.balance) - Number(a.balance));
+        const top5Holdings = sortedHolders.slice(0, 5).reduce((sum, h) => sum + Number(h.balance) / 1e11, 0);
+        const top5Percentage = (top5Holdings / totalSupplyNum) * 100;
+
+        switch (riskFilter) {
+          case 'extreme':
+            return devPercentage >= 50 || top5Percentage >= 70;
+          case 'very_high':
+            return (devPercentage >= 30 && devPercentage < 50) || (top5Percentage >= 50 && top5Percentage < 70);
+          case 'high':
+            return (devPercentage >= 20 && devPercentage < 30) || (top5Percentage >= 40 && top5Percentage < 50);
+          case 'moderate':
+            return (devPercentage >= 10 && devPercentage < 20) || (top5Percentage >= 30 && top5Percentage < 40);
+          case 'elevated':
+            return (devPercentage >= 5 && devPercentage < 10) || (top5Percentage >= 20 && top5Percentage < 30);
+          case 'guarded':
+            return (devPercentage >= 2 && devPercentage < 5) || (top5Percentage >= 10 && top5Percentage < 20);
+          case 'low':
+            return devPercentage < 2 && top5Percentage < 10;
+          default:
+            return true;
+        }
+      });
     }
 
     // Apply sorting
@@ -938,14 +964,17 @@ export default function TokensPage() {
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="gap-2 flex-1 sm:flex-none">
                   <Filter className="h-4 w-4" />
-                  {riskFilter === 'all' ? 'All Risks' : `${riskFilter.charAt(0).toUpperCase() + riskFilter.slice(1)} Risk`}
+                  {riskFilter === 'all' ? 'All Risks' : `${riskFilter.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')} Risk`}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
                 <DropdownMenuItem onClick={() => setRiskFilter('all')}>All Risks</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setRiskFilter('low')}>Low Risk</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setRiskFilter('guarded')}>Guarded Risk</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setRiskFilter('elevated')}>Elevated Risk</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setRiskFilter('moderate')}>Moderate Risk</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setRiskFilter('high')}>High Risk</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setRiskFilter('very_high')}>Very High Risk</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setRiskFilter('extreme')}>Extreme Risk</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

@@ -317,23 +317,23 @@ export default function DocsPage() {
                       System Requirements
                     </h3>
                     <div className="space-y-2">
-                      <div className="data-row">
-                        <span className="data-label">Supported Browsers</span>
-                        <span>Chrome 88+, Edge 88+, Brave 1.20+</span>
-                      </div>
-                      <div className="data-row">
-                        <span className="data-label">Operating Systems</span>
-                        <span>Windows 10+, macOS 10.15+, Linux</span>
-                      </div>
-                      <div className="data-row">
-                        <span className="data-label">Extension Size</span>
-                        <span>~500KB</span>
-                      </div>
-                      <div className="data-row">
-                        <span className="data-label">Permissions Required</span>
-                        <span>Storage, Active Tab, odin.fun domain access</span>
-                      </div>
-                    </div>
+                  <div className="data-row">
+                    <span className="data-label">Supported Browsers</span>
+                    <span>Chrome 88+, Edge 88+, Brave 1.20+</span>
+                  </div>
+                  <div className="data-row">
+                    <span className="data-label">Operating Systems</span>
+                    <span>Windows 10+, macOS 10.15+, Linux</span>
+                  </div>
+                  <div className="data-row">
+                    <span className="data-label">Extension Size</span>
+                    <span>~500KB</span>
+                  </div>
+                  <div className="data-row">
+                    <span className="data-label">Permissions Required</span>
+                    <span>Storage, Active Tab, odin.fun domain access</span>
+                  </div>
+                </div>
                   </div>
                 </div>
               </div>
@@ -464,7 +464,7 @@ export default function DocsPage() {
                 <h2 className="text-lg font-medium mb-4">API Overview</h2>
 
                 <div className="space-y-4">
-                  <p className="text-sm">
+                    <p className="text-sm">
                     ODINSMASH provides a REST API that allows developers to integrate token analysis capabilities into
                     their own applications. To request API access, please DM us on X.
                   </p>
@@ -787,8 +787,8 @@ export default function DocsPage() {
                         <p className="text-sm text-muted-foreground">
                           Token data is fetched in real-time when you check a token. The analysis reflects the current
                           state of the token at the time of checking. For the most up-to-date information, we recommend
-                          re-checking tokens before making investment decisions.
-                        </p>
+                      re-checking tokens before making investment decisions.
+                    </p>
                       </div>
                     </div>
                   </div>
@@ -901,12 +901,12 @@ export default function DocsPage() {
 
                       <div className="space-y-1">
                         <p className="text-sm font-medium">Wallet connection issues</p>
-                        <ol className="space-y-1 pl-6 text-sm list-decimal">
+                    <ol className="space-y-1 pl-6 text-sm list-decimal">
                           <li>Make sure your wallet extension is installed and up to date</li>
                           <li>Check if you're connected to the correct network</li>
                           <li>Try disconnecting and reconnecting your wallet</li>
                           <li>Restart your browser</li>
-                        </ol>
+                    </ol>
                       </div>
                     </div>
                   </div>
@@ -928,20 +928,20 @@ export default function DocsPage() {
 
                       <div className="space-y-1">
                         <p className="text-sm font-medium">"Check with ODINSMASH" button not appearing</p>
-                        <ol className="space-y-1 pl-6 text-sm list-decimal">
-                          <li>Refresh the page</li>
-                          <li>Check if the extension is enabled in your browser</li>
-                          <li>Make sure you're on a token page (URL should contain "/token/")</li>
-                        </ol>
-                      </div>
+                    <ol className="space-y-1 pl-6 text-sm list-decimal">
+                      <li>Refresh the page</li>
+                      <li>Check if the extension is enabled in your browser</li>
+                      <li>Make sure you're on a token page (URL should contain "/token/")</li>
+                    </ol>
+                  </div>
 
                       <div className="space-y-1">
                         <p className="text-sm font-medium">Extension popup not opening</p>
-                        <ol className="space-y-1 pl-6 text-sm list-decimal">
-                          <li>Try restarting your browser</li>
-                          <li>Disable and re-enable the extension</li>
-                          <li>Check for browser updates</li>
-                        </ol>
+                    <ol className="space-y-1 pl-6 text-sm list-decimal">
+                      <li>Try restarting your browser</li>
+                      <li>Disable and re-enable the extension</li>
+                      <li>Check for browser updates</li>
+                    </ol>
                       </div>
                     </div>
                   </div>
