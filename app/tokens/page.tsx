@@ -167,12 +167,22 @@ const fetchWithRetry = async (url: string) => {
 
 // Update the processHolderData function
 async function processHolderData(holders: any[], token: Token): Promise<RiskAssessment> {
+  // Special handling for tokens with 0 holders
+  if (token.holder_count === 0) {
+    return {
+      level: "NEW TOKEN",
+      color: "text-blue-500",
+      message: "Recently created token",
+      warning: "No holder data available yet"
+    };
+  }
+
   if (!holders || holders.length === 0) {
     return {
-      level: "ERROR",
-      color: "text-red-600",
-      message: "No holder data available",
-      warning: "Error calculating risk level"
+      level: "PENDING",
+      color: "text-yellow-500",
+      message: "Holder data unavailable",
+      warning: "Waiting for blockchain data"
     };
   }
 
@@ -419,6 +429,15 @@ const fetchTokenHolders = async (tokenIds: string | string[], creatorId: string)
   try {
     const ids = Array.isArray(tokenIds) ? tokenIds : [tokenIds];
     
+    // First check cache
+    const cachedHolders = ids.map(id => getCachedHolders(id)).filter(Boolean);
+    if (cachedHolders.length === ids.length) {
+      return cachedHolders.reduce((acc, holders, index) => {
+        acc[ids[index]] = { data: holders };
+        return acc;
+      }, {});
+    }
+
     const response = await fetch(
       `${API_BASE_URL}/api/batch-holders?tokenIds=${JSON.stringify(ids)}`,
       {
@@ -429,11 +448,23 @@ const fetchTokenHolders = async (tokenIds: string | string[], creatorId: string)
     );
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      // Return empty holders array instead of throwing
+      return ids.reduce((acc, id) => {
+        acc[id] = { data: [] };
+        return acc;
+      }, {});
     }
 
     const holdersMap = await response.json();
     
+    // Ensure each token has at least an empty array
+    ids.forEach(id => {
+      if (!holdersMap[id]) {
+        holdersMap[id] = { data: [] };
+      }
+    });
+    
+    // Process each token's holders
     Object.entries(holdersMap).forEach(([tokenId, holdersData]) => {
       const holdersArray = Array.isArray(holdersData?.data) ? holdersData.data : [];
       
@@ -458,7 +489,13 @@ const fetchTokenHolders = async (tokenIds: string | string[], creatorId: string)
     return holdersMap;
   } catch (error) {
     console.error('Error fetching holders:', error);
-    return {};
+    // Return empty holders array for all tokens instead of empty object
+    return Array.isArray(tokenIds) ? 
+      tokenIds.reduce((acc, id) => {
+        acc[id] = { data: [] };
+        return acc;
+      }, {}) :
+      { [tokenIds]: { data: [] } };
   }
 };
 
