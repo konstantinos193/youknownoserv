@@ -25,6 +25,9 @@ export default function DocsPage() {
               <Link href="/tokens" className="text-muted-foreground hover:text-foreground">
                 TOKENS
               </Link>
+              <Link href="/extension" className="text-muted-foreground hover:text-foreground">
+                EXTENSION
+              </Link>
               <Link href="/docs" className="text-primary hover:text-primary/80">
                 DOCS
               </Link>

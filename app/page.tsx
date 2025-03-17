@@ -173,6 +173,9 @@ export default async function Home() {
               <Link href="/extension" className="text-muted-foreground hover:text-foreground">
                 EXTENSION
               </Link>
+              <Link href="/docs" className="text-muted-foreground hover:text-foreground">
+                DOCS
+              </Link>
             </nav>
           </div>
         </div>
