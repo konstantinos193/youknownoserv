@@ -80,7 +80,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-lg font-medium mb-2">8. Contact Us</h2>
             <p className="text-sm">
-              If you have any questions about this Privacy Policy, please contact us at support@odinsmash.com.
+              If you have any questions about this Privacy Policy, please contact us at odinsmashinc@gmail.com.
             </p>
           </section>
         </div>
