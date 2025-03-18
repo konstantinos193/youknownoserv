@@ -1086,7 +1086,7 @@ const calculateNewHolderGrowth = async (
       availableAddresses: currentAddresses.length
     });
 
-        return {
+    return {
       dailyGrowth: {
         current: totalHolderCount,
         previous: previousHolderCount,
@@ -1104,7 +1104,7 @@ const calculateNewHolderGrowth = async (
 
   } catch (error) {
     console.error('Error calculating holder growth:', error);
-    return {
+        return {
       dailyGrowth: { current: 0, previous: 0, growthRate: 0, newHolders: 0 },
       weeklyGrowth: { current: 0, previous: 0, growthRate: 0, newHolders: 0 },
       retentionRate: 0
@@ -1158,16 +1158,17 @@ const HolderAnalysisComponent = ({ holderAnalysis }: { holderAnalysis: HolderGro
 // Simplify the fetchAllHoldersWithPagination function
 const fetchAllHoldersWithPagination = async (tokenId: string, totalHolders: number) => {
   try {
-    // Use fetchWithRetry instead of direct fetch to handle CORS properly
-    const response = await fetchWithRetry(
-      `${API_URL}/api/token/${tokenId}/owners?limit=10000000`,
+    // Use a more reasonable limit (1000 is typically good)
+    const response = await fetch(
+      `${API_URL}/api/token/${tokenId}/owners?limit=20000`,
       {
         headers: {
           'x-api-key': API_KEY || '',
           'Content-Type': 'application/json',
           'Accept': 'application/json',
+          'Origin': 'https://odinsmash.com',
+          'Referer': 'https://odinsmash.com/'
         },
-        // Remove credentials and mode to let the server handle CORS
         cache: 'no-store'
       }
     );
