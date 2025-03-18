@@ -1158,19 +1158,17 @@ const HolderAnalysisComponent = ({ holderAnalysis }: { holderAnalysis: HolderGro
 // Simplify the fetchAllHoldersWithPagination function
 const fetchAllHoldersWithPagination = async (tokenId: string, totalHolders: number) => {
   try {
-    const response = await fetch(
+    // Use fetchWithRetry instead of direct fetch to handle CORS properly
+    const response = await fetchWithRetry(
       `${API_URL}/api/token/${tokenId}/owners?limit=10000000`,
       {
         headers: {
           'x-api-key': API_KEY || '',
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'Origin': 'https://odinsmash.com',
-          'Referer': 'https://odinsmash.com/',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36'
         },
-        mode: 'cors',
-        credentials: 'include'
+        // Remove credentials and mode to let the server handle CORS
+        cache: 'no-store'
       }
     );
 
