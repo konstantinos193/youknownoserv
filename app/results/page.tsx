@@ -9,6 +9,7 @@ import { ArrowLeft, ExternalLink, Globe, X, Send } from "lucide-react";
 import { formatSupply } from '../../utils/formatSupply';
 import { Market } from '@/types/market';
 import { calculateRiskLevel } from '@/utils/calculateRiskLevel';
+import { supabase } from '@/lib/supabase';
 
 // Add constants at the top of the file
 const TRUSTED_DEVELOPERS = [
@@ -957,189 +958,203 @@ const LoadingHolders = () => (
   </div>
 );
 
-// Add new interface for holder analysis
-interface HolderAnalysis {
-  newHolderGrowthRate: number;
-  top10AccumulationTrend: number;
-  holderCount: number;
-  whaleActivity: {
-    accumulation: number;
-    distribution: number;
-  };
+// Add new interfaces for holder tracking
+interface HolderPeriodData {
+  period_start: string;
+  period_end: string;
+  total_holders: number;
+  new_holders: number;
+  holder_addresses: string[];
 }
 
-const TOTAL_SUPPLY = 21_000_000; // Add this constant at the top with other constants
-
-const calculateHolderAnalysis = async (tokenId: string, holders: any[]): Promise<HolderAnalysis> => {
-  try {
-    console.log('Starting holder analysis calculation for:', tokenId);
-    console.log('Current holders:', holders.length);
-
-    if (!holders || holders.length === 0) {
-      throw new Error('No holders data');
-    }
-
-    // Use constant total supply instead of trying to get it from holders
-    const totalSupply = TOTAL_SUPPLY;
-    console.log('Using total supply:', totalSupply);
-
-    // Calculate top 10 holdings
-    const top10Holdings = holders
-      .slice(0, 10)
-      .reduce((sum, h) => sum + Number(h.balance) / 1e11, 0); // Divide by 1e11 to get actual balance
-    
-    console.log('Top 10 holdings:', top10Holdings);
-    
-    // Calculate whale metrics (holders with >1% supply)
-    const whaleThreshold = totalSupply * 0.01;
-    const whales = holders.filter(h => (Number(h.balance) / 1e11) >= whaleThreshold);
-    
-    // Calculate accumulation/distribution
-    const whaleAccumulation = whales.length;
-    const whaleDistribution = 0; // We can't determine distribution without historical data
-
-    // Calculate top 10 accumulation trend
-    const top10Percentage = (top10Holdings / totalSupply) * 100;
-    
-    const analysis = {
-      newHolderGrowthRate: 0,
-      top10AccumulationTrend: Number.isFinite(top10Percentage) ? top10Percentage : 0,
-      holderCount: holders.length,
-      whaleActivity: {
-        accumulation: whaleAccumulation,
-        distribution: whaleDistribution
-      }
-    };
-
-    console.log('Final holder analysis:', analysis);
-    return analysis;
-
-  } catch (error) {
-    console.error('Error in calculateHolderAnalysis:', error);
-    return {
-      newHolderGrowthRate: 0,
-      top10AccumulationTrend: 0,
-      holderCount: holders.length || 0,
-      whaleActivity: {
-        accumulation: 0,
-        distribution: 0
-      }
-    };
-  }
-};
-
-// Update the calculateTokenPrice helper function
-const calculateTokenPrice = (marketcap: number, totalSupply: number, btcUsdPrice: number): string => {
-  try {
-    // Calculate price in BTC
-    const priceInBtc = (marketcap / totalSupply) / 1e5; // Divide by 1e5 for correct decimals
-    
-    // Convert to USD
-    return (priceInBtc * btcUsdPrice).toFixed(8);
-  } catch (error) {
-    console.error('Price calculation error:', error);
-    return '0.00000000';
-  }
-};
-
-const calculateRiskLevel = async (token: Token & { holders?: any[], devHoldings?: number }): Promise<RiskAssessment> => {
-  const totalSupply = Number(token.total_supply);
-  const devHoldings = token.devHoldings || token.holders?.find(h => h.address === token.creator)?.balance || 0;
-  const devPercentage = (devHoldings / totalSupply) * 100;
-
-  // Sort holders by balance for top holder calculations
-  const sortedHolders = [...(token.holders || [])].sort((a, b) => Number(b.balance) - Number(a.balance));
-  const top5Holdings = sortedHolders.slice(0, 5).reduce((sum, h) => sum + Number(h.balance), 0);
-  const top10Holdings = sortedHolders.slice(0, 10).reduce((sum, h) => sum + Number(h.balance), 0);
-  
-  const top5Percentage = (top5Holdings / totalSupply) * 100;
-  const top10Percentage = (top10Holdings / totalSupply) * 100;
-
-  // Build concise warning message
-  const holderStats = [
-    `Dev: ${devPercentage.toFixed(2)}%`,
-    `Top 5: ${top5Percentage.toFixed(2)}%`,
-    `Top 10: ${top10Percentage.toFixed(2)}%`
-  ].join(' | ');
-
-  // Check if dev has sold position
-  if (devHoldings <= 0 || isNaN(devHoldings)) {
-    return {
-      level: 'EXTREME RISK',
-      color: 'text-red-600',
-      message: 'Developer has sold their entire position - Extreme risk of abandonment',
-      warning: 'Developer holds 0% of the supply'
-    };
-  }
-
-  // Check for multiple tokens by developer
-  if (!TRUSTED_DEVELOPERS.includes(token.creator)) {
-    try {
-      const creatorTokens = await fetchCreatorTokens(token.creator);
-      if (creatorTokens && creatorTokens.length > 1) {
-        return {
-          level: 'EXTREME RISK',
-          color: 'text-red-600',
-          message: 'Developer has created multiple tokens - Extreme risk of abandonment',
-          warning: `Developer has created ${creatorTokens.length} tokens`
-        };
-      }
-    } catch (error) {
-      console.error('Error checking creator tokens:', error);
-    }
-  }
-
-  // Continue with the regular risk level checks
-  if (devPercentage >= 50 || top5Percentage >= 70) {
-    return {
-      level: 'EXTREME RISK',
-      color: 'text-red-600',
-      message: 'Extremely high centralization. High probability of price manipulation.',
-      warning: holderStats
-    };
-  } else if (devPercentage >= 30 || top5Percentage >= 50) {
-    return {
-      level: 'VERY HIGH RISK',
-      color: 'text-red-500',
-      message: 'Very high centralization detected. Major price manipulation risk.',
-      warning: holderStats
-    };
-  } else if (devPercentage >= 20 || top5Percentage >= 40) {
-    return {
-      level: 'HIGH RISK',
-      color: 'text-orange-500',
-      message: 'High holder concentration. Exercise extreme caution.',
-      warning: holderStats
-    };
-  } else if (devPercentage >= 10 || top5Percentage >= 30) {
-    return {
-      level: 'MODERATE RISK',
-      color: 'text-yellow-500',
-      message: 'Standard market risks apply. Trade carefully.',
-      warning: holderStats
-    };
-  } else if (devPercentage >= 5 || top5Percentage >= 20) {
-    return {
-      level: 'ELEVATED RISK',
-      color: 'text-yellow-400',
-      message: 'Slightly elevated risk',
-      warning: holderStats
-    };
-  } else if (devPercentage >= 2 || top5Percentage >= 10) {
-    return {
-      level: 'GUARDED RISK',
-      color: 'text-blue-400',
-      message: 'Low concentration',
-      warning: holderStats
-    };
-  }
-
-  return {
-    level: 'LOW RISK',
-    color: 'text-green-500',
-    message: 'Well distributed',
-    warning: holderStats
+interface HolderGrowthMetrics {
+  dailyGrowth: {
+    current: number;
+    previous: number;
+    growthRate: number;
+    newHolders: number;
   };
+  weeklyGrowth: {
+    current: number;
+    previous: number;
+    growthRate: number;
+    newHolders: number;
+  };
+  retentionRate: number;
+}
+
+const saveHolderData = async (
+  tokenId: string,
+  data: {
+    holder_count: number;
+    new_holders: number;
+    growth_rate: number;
+    holder_addresses: string[];
+  }
+) => {
+  try {
+    const now = new Date();
+    const oneMinuteAgo = new Date(now.getTime() - 60 * 1000);
+
+    // Check for recent entry
+    const { data: recentEntry } = await supabase
+      .from('holder_history')
+      .select('*')
+      .eq('token_id', tokenId)
+      .gte('created_at', oneMinuteAgo.toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    // Only save if we don't have a recent entry or if the data has changed
+    if (!recentEntry || 
+        recentEntry.holder_count !== data.holder_count || 
+        JSON.stringify(recentEntry.holder_addresses) !== JSON.stringify(data.holder_addresses)) {
+      
+      const { error } = await supabase
+        .from('holder_history')
+        .insert({
+          token_id: tokenId,
+          holder_count: data.holder_count,
+          new_holders: data.new_holders,
+          growth_rate: data.growth_rate,
+          holder_addresses: data.holder_addresses,
+          created_at: now.toISOString()
+        });
+
+      if (error) {
+        console.error('Error saving holder data:', error);
+        throw error;
+      }
+
+      console.log('Successfully saved holder data:', data);
+    }
+  } catch (error) {
+    console.error('Error in saveHolderData:', error);
+  }
+};
+
+// Update the calculateNewHolderGrowth function to pass holder addresses
+const calculateNewHolderGrowth = async (
+  tokenId: string,
+  currentHolders: any[]
+): Promise<HolderGrowthMetrics> => {
+  try {
+    const now = new Date();
+    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    // Get current holder addresses
+    const currentHolderAddresses = currentHolders.map(holder => holder.user);
+    const currentHolderCount = currentHolderAddresses.length;
+
+    // Get previous holder data
+    const { data: previousData, error } = await supabase
+      .from('holder_history')
+      .select('*')
+      .eq('token_id', tokenId)
+      .lte('created_at', oneDayAgo.toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (error) {
+      console.error('Supabase query error:', error);
+      throw error;
+    }
+
+    const previousHolderCount = previousData?.[0]?.holder_count || currentHolderCount;
+    const previousHolderAddresses = previousData?.[0]?.holder_addresses || [];
+    
+    // Calculate new holders by comparing addresses
+    const newHolderAddresses = currentHolderAddresses.filter(
+      address => !previousHolderAddresses.includes(address)
+    );
+    const holderDifference = newHolderAddresses.length;
+    
+    // Calculate growth rate
+    let growthRate = 0;
+    if (previousHolderCount > 0) {
+      growthRate = ((currentHolderCount - previousHolderCount) / previousHolderCount) * 100;
+    }
+
+    // Save current data with addresses
+    await saveHolderData(tokenId, {
+      holder_count: currentHolderCount,
+      new_holders: holderDifference,
+      growth_rate: growthRate,
+      holder_addresses: currentHolderAddresses
+    });
+
+    console.log('Growth calculation:', {
+      currentHolderCount,
+      previousHolderCount,
+      holderDifference,
+      growthRate,
+      newHolders: newHolderAddresses.length
+    });
+
+        return {
+      dailyGrowth: {
+        current: currentHolderCount,
+        previous: previousHolderCount,
+        growthRate: growthRate,
+        newHolders: holderDifference
+      },
+      weeklyGrowth: {
+        current: currentHolderCount,
+        previous: previousHolderCount,
+        growthRate: growthRate,
+        newHolders: holderDifference
+      },
+      retentionRate: 100
+    };
+
+    } catch (error) {
+    console.error('Error calculating holder growth:', error);
+    return getDefaultGrowthMetrics();
+  }
+};
+
+// Update the HolderAnalysisComponent to show more detailed information
+const HolderAnalysisComponent = ({ holderAnalysis }: { holderAnalysis: HolderGrowthMetrics }) => {
+  if (!holderAnalysis) return null;
+
+  const { dailyGrowth } = holderAnalysis;
+  const isPositiveGrowth = dailyGrowth.newHolders > 0;
+  const growthColor = isPositiveGrowth ? 'text-green-500' : dailyGrowth.newHolders < 0 ? 'text-red-500' : 'text-gray-500';
+
+  return (
+    <div className="terminal-card p-4">
+      <h2 className="mb-4 text-sm font-medium">Holder Analysis</h2>
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <h3 className="text-xs font-medium text-muted-foreground">24h Growth</h3>
+          <div className="data-row">
+            <span className="data-label">New Holders</span>
+            <span className={growthColor}>
+              {dailyGrowth.newHolders > 0 ? '+' : ''}{dailyGrowth.newHolders}
+            </span>
+          </div>
+          <div className="data-row">
+            <span className="data-label">Growth Rate</span>
+            <span className={growthColor}>
+              {dailyGrowth.growthRate.toFixed(2)}%
+            </span>
+          </div>
+          <div className="data-row">
+            <span className="data-label">Total Holders</span>
+            <span>
+              {dailyGrowth.previous} → {dailyGrowth.current}
+              {dailyGrowth.previous !== dailyGrowth.current && (
+                <span className={`ml-2 ${growthColor}`}>
+                  ({isPositiveGrowth ? '↑' : '↓'})
+                </span>
+              )}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default function ResultsPage() {
@@ -1166,7 +1181,7 @@ export default function ResultsPage() {
   const [cachedHolders, setCachedHolders] = useState<any[]>([]);
   const [riskAnalysis, setRiskAnalysis] = useState(null);
   const [btcUsdPrice, setBtcUsdPrice] = useState(0);
-  const [holderAnalysis, setHolderAnalysis] = useState<HolderAnalysis | null>(null);
+  const [holderAnalysis, setHolderAnalysis] = useState<HolderGrowthMetrics | null>(null);
 
   const fetchMarkets = async () => {
     try {
@@ -1278,11 +1293,9 @@ export default function ResultsPage() {
           setCreatorUsername('Unknown');
         }
         
-        setHolderAnalysis(prev => ({
-          ...prev,
-          newHolderGrowthRate: data.holderGrowth || 0,
-          holderCount: data.token.holder_count || 0
-        }));
+        // Calculate holder analysis
+        const analysis = await calculateNewHolderGrowth(tokenId, data.holders.data || []);
+        setHolderAnalysis(analysis);
 
         setLoading(false);
       } catch (error) {
@@ -1297,90 +1310,6 @@ export default function ResultsPage() {
     
     return () => clearInterval(interval);
   }, [tokenId]);
-
-  // Separate useEffect for holder analysis
-  useEffect(() => {
-    const updateAnalysis = async () => {
-      if (holders.length > 0) {
-        console.log('Calculating holder analysis with:', holders.length, 'holders');
-        const analysis = await calculateHolderAnalysis(tokenId, holders);
-        setHolderAnalysis(analysis);
-      }
-    };
-
-    updateAnalysis();
-  }, [holders, tokenId]);
-
-  // Update the HolderAnalysisComponent
-  const HolderAnalysisComponent = ({ holderAnalysis }: { holderAnalysis: HolderAnalysis }) => {
-    if (!holderAnalysis) return null;
-    
-    // Add default values and null checks
-    const growthRate = holderAnalysis.newHolderGrowthRate ?? 0;
-    const accumulationTrend = holderAnalysis.top10AccumulationTrend ?? 0;
-    const accumulation = holderAnalysis.whaleActivity?.accumulation ?? 0;
-    const distribution = holderAnalysis.whaleActivity?.distribution ?? 0;
-    
-    return (
-      <div className="terminal-card p-4">
-        <h2 className="mb-4 text-sm font-medium">Holder Analysis</h2>
-        <div className="space-y-2 text-sm">
-          <div className="data-row">
-            <span className="data-label">New Holder Growth</span>
-            <span>{growthRate.toFixed(2)}%</span>
-          </div>
-          <div className="data-row">
-            <span className="data-label">Top 10 Accumulation</span>
-            <span>{accumulationTrend.toFixed(2)}%</span>
-          </div>
-          <div className="data-row">
-            <span className="data-label">Whale Distribution</span>
-            <span>
-              {accumulation} Active / {distribution} Inactive
-            </span>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Update the HolderStats component
-  const HolderStats = ({ holderAnalysis }: { holderAnalysis: HolderAnalysis }) => {
-    if (!holderAnalysis) return null;
-    
-    // Add default values and null checks
-    const growthRate = holderAnalysis.newHolderGrowthRate ?? 0;
-    const accumulationTrend = holderAnalysis.top10AccumulationTrend ?? 0;
-    const holderCount = holderAnalysis.holderCount ?? 0;
-    const accumulation = holderAnalysis.whaleActivity?.accumulation ?? 0;
-    const distribution = holderAnalysis.whaleActivity?.distribution ?? 0;
-    
-    return (
-      <div className="terminal-card p-4">
-        <h2 className="mb-4 text-sm font-medium">Holder Stats</h2>
-        <div className="space-y-2 text-sm">
-          <div className="data-row">
-            <span className="data-label">New Holders (24h)</span>
-            <span>{growthRate.toFixed(2)}%</span>
-          </div>
-          <div className="data-row">
-            <span className="data-label">Top 10 Accumulation</span>
-            <span>{accumulationTrend.toFixed(2)}%</span>
-          </div>
-          <div className="data-row">
-            <span className="data-label">Total Holders</span>
-            <span>{holderCount}</span>
-          </div>
-          <div className="data-row">
-            <span className="data-label">Whale Activity</span>
-            <span>
-              {accumulation} 🟢 / {distribution} 🔴
-            </span>
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   if (loading) {
     return (
@@ -1479,7 +1408,9 @@ export default function ResultsPage() {
                 </div>
                 <div className="data-row">
                   <span className="data-label">Supply</span>
-                  <span>{formatSupply(tokenData.total_supply, 18)} {tokenData.ticker}</span>
+                  <span>
+                    {formatSupply('short')} {tokenData?.ticker || ''}
+                  </span>
                 </div>
                 <div className="data-row">
                   <span className="data-label">Creator</span>
