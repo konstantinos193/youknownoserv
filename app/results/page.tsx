@@ -996,39 +996,38 @@ const saveHolderData = async (
     const now = new Date();
     const oneMinuteAgo = new Date(now.getTime() - 60 * 1000);
 
-    // Check for recent entry
-    const { data: recentEntry } = await supabase
-      .from('holder_history')
-      .select('*')
-      .eq('token_id', tokenId)
-      .gte('created_at', oneMinuteAgo.toISOString())
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    console.log('Saving holder data:', {
+      tokenId,
+      holderCount: data.holder_count,
+      currentHolders: data.holder_addresses.length // Debug log
+    });
 
-    // Only save if we don't have a recent entry or if the data has changed
-    if (!recentEntry || 
-        recentEntry.holder_count !== data.holder_count || 
-        JSON.stringify(recentEntry.holder_addresses) !== JSON.stringify(data.holder_addresses)) {
-      
-      const { error } = await supabase
-        .from('holder_history')
-        .insert({
-          token_id: tokenId,
-          holder_count: data.holder_count,
-          new_holders: data.new_holders,
-          growth_rate: data.growth_rate,
-          holder_addresses: data.holder_addresses,
-          created_at: now.toISOString()
-        });
-
-      if (error) {
-        console.error('Error saving holder data:', error);
-        throw error;
-      }
-
-      console.log('Successfully saved holder data:', data);
+    // Verify we're using the correct holder count
+    const actualHolderCount = data.holder_addresses.length;
+    if (actualHolderCount !== data.holder_count) {
+      console.warn('Holder count mismatch:', {
+        provided: data.holder_count,
+        actual: actualHolderCount
+      });
     }
+
+    const { error } = await supabase
+      .from('holder_history')
+      .insert({
+        token_id: tokenId,
+        holder_count: actualHolderCount, // Use the actual count from addresses
+        new_holders: data.new_holders,
+        growth_rate: data.growth_rate,
+        holder_addresses: data.holder_addresses,
+        created_at: now.toISOString()
+      });
+
+    if (error) {
+      console.error('Error saving holder data:', error);
+      throw error;
+    }
+
+    console.log('Successfully saved holder data with count:', actualHolderCount);
   } catch (error) {
     console.error('Error in saveHolderData:', error);
   }
@@ -1041,10 +1040,17 @@ const calculateNewHolderGrowth = async (
 ): Promise<HolderGrowthMetrics> => {
   try {
     const now = new Date();
-    const oneDayAgo = new Date(now.getTime() - 25 * 60 * 60 * 1000); // 25 hours ago to be safe
+    const oneDayAgo = new Date(now.getTime() - 25 * 60 * 60 * 1000);
 
-    // Get current holder count
-    const currentHolderCount = currentHolders.length;
+    // Get total holder count from the API response
+    const totalHolderCount = currentHolders[0]?.count || currentHolders.length;
+    const currentAddresses = currentHolders.map(h => h.user);
+
+    console.log('Debug - Current holders:', {
+      totalCount: totalHolderCount,
+      availableAddresses: currentAddresses.length,
+      addresses: currentAddresses
+    });
 
     // Get data from 24h ago
     const { data: previousData } = await supabase
@@ -1055,32 +1061,40 @@ const calculateNewHolderGrowth = async (
       .order('created_at', { ascending: false })
       .limit(1);
 
-    // If no 24h old data, use 0 as previous count
+    // If no previous data exists, use 0 as previous count
     const previousHolderCount = previousData?.[0]?.holder_count || 0;
     
-    // Calculate growth
-    const netChange = currentHolderCount - previousHolderCount;
+    // Calculate growth using the total holder count
+    const netChange = totalHolderCount - previousHolderCount;
     const growthRate = previousHolderCount > 0
       ? (netChange / previousHolderCount) * 100
       : 100;
 
-    // Save current data
+    // Save current data with total holder count
     await saveHolderData(tokenId, {
-      holder_count: currentHolderCount,
+      holder_count: totalHolderCount,
       new_holders: netChange,
       growth_rate: growthRate,
-      holder_addresses: currentHolders.map(h => h.user)
+      holder_addresses: currentAddresses // Save available addresses
     });
 
-    return {
+    console.log('Debug - Growth metrics:', {
+      current: totalHolderCount,
+      previous: previousHolderCount,
+      netChange,
+      growthRate,
+      availableAddresses: currentAddresses.length
+    });
+
+        return {
       dailyGrowth: {
-        current: currentHolderCount,
+        current: totalHolderCount,
         previous: previousHolderCount,
         growthRate: growthRate,
         newHolders: netChange
       },
       weeklyGrowth: {
-        current: currentHolderCount,
+        current: totalHolderCount,
         previous: previousHolderCount,
         growthRate: growthRate,
         newHolders: netChange
@@ -1139,6 +1153,36 @@ const HolderAnalysisComponent = ({ holderAnalysis }: { holderAnalysis: HolderGro
       </div>
     </div>
   );
+};
+
+// Simplify the fetchAllHoldersWithPagination function
+const fetchAllHoldersWithPagination = async (tokenId: string, totalHolders: number) => {
+  try {
+    const response = await fetch(
+      `${API_URL}/api/token/${tokenId}/owners?limit=10000000`,
+      {
+        headers: {
+          'x-api-key': API_KEY || '',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        credentials: 'include',
+        mode: 'cors'
+      }
+    );
+
+    if (!response.ok) {
+      console.error('Failed to fetch holders:', response.status);
+      return [];
+    }
+
+    const data = await response.json();
+    console.log(`Fetched ${data.data?.length || 0} holders out of ${data.count}`);
+    return data.data || [];
+  } catch (error) {
+    console.error('Error fetching holders:', error);
+    return [];
+  }
 };
 
 export default function ResultsPage() {
@@ -1226,6 +1270,7 @@ export default function ResultsPage() {
           return;
         }
 
+        // First get basic token data
         const response = await fetch(`${API_URL}/api/token-data/${tokenId}`, {
           headers: {
             'x-api-key': API_KEY || '',
@@ -1241,15 +1286,18 @@ export default function ResultsPage() {
         }
 
         const data = await response.json();
-        console.log('API Response:', data);
         
+        // Fetch all holders in a single request
+        const allHolders = await fetchAllHoldersWithPagination(tokenId, data.token.holder_count);
+        
+        // Update states with complete data
         setTokenData({
           ...data.token,
           volumeMetrics: data.volumeMetrics
         });
         
-        setHolders(data.holders.data || []);
-        setCachedHolders(data.holders.data || []);
+        setHolders(allHolders);
+        setCachedHolders(allHolders);
         setBtcUsdPrice(data.btcUsdPrice);
         
         setPrice({
@@ -1265,8 +1313,7 @@ export default function ResultsPage() {
         });
         
         if (data.token?.creator) {
-          // Try to get username from the holders data first
-          const creatorHolder = data.holders?.data?.find(h => h.user === data.token.creator);
+          const creatorHolder = allHolders.find(h => h.user === data.token.creator);
           if (creatorHolder?.user_username) {
             setCreatorUsername(creatorHolder.user_username);
           } else {
@@ -1277,8 +1324,8 @@ export default function ResultsPage() {
           setCreatorUsername('Unknown');
         }
         
-        // Calculate holder analysis
-        const analysis = await calculateNewHolderGrowth(tokenId, data.holders.data || []);
+        // Calculate holder analysis with complete holder list
+        const analysis = await calculateNewHolderGrowth(tokenId, allHolders);
         setHolderAnalysis(analysis);
 
         setLoading(false);
@@ -1290,8 +1337,7 @@ export default function ResultsPage() {
     };
 
     fetchData();
-    const interval = setInterval(fetchData, 15000);
-    
+    const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
   }, [tokenId]);
 
