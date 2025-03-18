@@ -1041,14 +1041,13 @@ const calculateNewHolderGrowth = async (
 ): Promise<HolderGrowthMetrics> => {
   try {
     const now = new Date();
-    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const oneDayAgo = new Date(now.getTime() - 25 * 60 * 60 * 1000); // 25 hours ago to be safe
 
-    // Get current holder addresses
-    const currentHolderAddresses = currentHolders.map(holder => holder.user);
-    const currentHolderCount = currentHolderAddresses.length;
+    // Get current holder count
+    const currentHolderCount = currentHolders.length;
 
-    // Get previous holder data
-    const { data: previousData, error } = await supabase
+    // Get data from 24h ago
+    const { data: previousData } = await supabase
       .from('holder_history')
       .select('*')
       .eq('token_id', tokenId)
@@ -1056,61 +1055,46 @@ const calculateNewHolderGrowth = async (
       .order('created_at', { ascending: false })
       .limit(1);
 
-    if (error) {
-      console.error('Supabase query error:', error);
-      throw error;
-    }
-
-    const previousHolderCount = previousData?.[0]?.holder_count || currentHolderCount;
-    const previousHolderAddresses = previousData?.[0]?.holder_addresses || [];
+    // If no 24h old data, use 0 as previous count
+    const previousHolderCount = previousData?.[0]?.holder_count || 0;
     
-    // Calculate new holders by comparing addresses
-    const newHolderAddresses = currentHolderAddresses.filter(
-      address => !previousHolderAddresses.includes(address)
-    );
-    const holderDifference = newHolderAddresses.length;
-    
-    // Calculate growth rate
-    let growthRate = 0;
-    if (previousHolderCount > 0) {
-      growthRate = ((currentHolderCount - previousHolderCount) / previousHolderCount) * 100;
-    }
+    // Calculate growth
+    const netChange = currentHolderCount - previousHolderCount;
+    const growthRate = previousHolderCount > 0
+      ? (netChange / previousHolderCount) * 100
+      : 100;
 
-    // Save current data with addresses
+    // Save current data
     await saveHolderData(tokenId, {
       holder_count: currentHolderCount,
-      new_holders: holderDifference,
+      new_holders: netChange,
       growth_rate: growthRate,
-      holder_addresses: currentHolderAddresses
+      holder_addresses: currentHolders.map(h => h.user)
     });
 
-    console.log('Growth calculation:', {
-      currentHolderCount,
-      previousHolderCount,
-      holderDifference,
-      growthRate,
-      newHolders: newHolderAddresses.length
-    });
-
-        return {
+    return {
       dailyGrowth: {
         current: currentHolderCount,
         previous: previousHolderCount,
         growthRate: growthRate,
-        newHolders: holderDifference
+        newHolders: netChange
       },
       weeklyGrowth: {
         current: currentHolderCount,
         previous: previousHolderCount,
         growthRate: growthRate,
-        newHolders: holderDifference
+        newHolders: netChange
       },
       retentionRate: 100
     };
 
-    } catch (error) {
+  } catch (error) {
     console.error('Error calculating holder growth:', error);
-    return getDefaultGrowthMetrics();
+    return {
+      dailyGrowth: { current: 0, previous: 0, growthRate: 0, newHolders: 0 },
+      weeklyGrowth: { current: 0, previous: 0, growthRate: 0, newHolders: 0 },
+      retentionRate: 0
+    };
   }
 };
 
