@@ -1164,10 +1164,13 @@ const fetchAllHoldersWithPagination = async (tokenId: string, totalHolders: numb
         headers: {
           'x-api-key': API_KEY || '',
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          'Origin': 'https://odinsmash.com',
+          'Referer': 'https://odinsmash.com/',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36'
         },
-        credentials: 'include',
-        mode: 'cors'
+        mode: 'cors',
+        credentials: 'include'
       }
     );
 
