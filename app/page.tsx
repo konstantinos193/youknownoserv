@@ -5,6 +5,7 @@ import { Search, Filter, ArrowUpDown } from "lucide-react"
 import { AnalysisHistory } from "@/components/AnalysisHistory"
 import { useState } from 'react';
 import Image from "next/image"
+import AdContainer from "@/components/ad-container"
 
 interface TokenData {
   id: string
@@ -149,8 +150,8 @@ export default async function Home() {
   const recentTokens = await getRecentTokens()
 
   return (
-    <div className="min-h-screen font-mono flex flex-col relative" style={{ backgroundColor: '#000000' }}>
-      <header className="border-b border-border" style={{ backgroundColor: '#000000' }}>
+    <div className="min-h-screen font-mono flex flex-col items-center" style={{ backgroundColor: '#000000' }}>
+      <header className="border-b border-border w-full relative" style={{ backgroundColor: '#000000' }}>
         <div className="container flex h-14 items-center justify-between px-2 sm:px-4">
           <div className="flex items-center gap-2 sm:gap-6">
             <Link href="/" className="flex items-center gap-2 text-base sm:text-lg font-semibold">
@@ -178,17 +179,23 @@ export default async function Home() {
               </Link>
             </nav>
           </div>
+          <Link 
+            href="https://odin.fun/token/2ait"
+            className="bg-yellow-500 text-black px-3 py-1 rounded-md animate-pulse hover:bg-yellow-600 text-xs sm:text-sm font-semibold"
+          >
+            Buy ODINSMASH
+          </Link>
         </div>
       </header>
-      <main className="container px-2 sm:px-4 py-4 sm:py-8 flex-1" style={{ backgroundColor: '#000000' }}>
-        <div className="max-w-2xl mx-auto space-y-4 sm:space-y-8">
-          <div className="space-y-1 sm:space-y-2">
+      <main className="container px-2 sm:px-4 py-4 sm:py-8 flex-1 flex flex-col items-center" style={{ backgroundColor: '#000000' }}>
+        <div className="max-w-[489px] w-full space-y-4 sm:space-y-8">
+          <div className="space-y-1 sm:space-y-2 text-center">
             <h1 className="text-xl sm:text-2xl font-semibold">Token Analysis</h1>
             <p className="text-xs sm:text-sm text-muted-foreground">
               Enter an Odin.fun token URL to analyze its risk profile
             </p>
           </div>
-          <div className="terminal-card p-3 sm:p-6 space-y-4 sm:space-y-6 backdrop-blur-sm bg-card/80">
+          <div className="terminal-card p-3 sm:p-6 space-y-4 sm:space-y-6 backdrop-blur-sm bg-card/80 w-full">
             <form 
               action="/results" 
               method="get"
@@ -206,75 +213,13 @@ export default async function Home() {
                 </Button>
               </div>
             </form>
-
-            <div className="space-y-2">
-              <h3 className="text-xs sm:text-sm font-medium text-muted-foreground">
-                Recent Analyses
-              </h3>
-              <div className="space-y-1">
-                {recentTokens.map((token) => {
-                  const risk = calculateRiskLevel(token);
-                  const imageUrl = `https://images.odin.fun/token/${token.id}`;
-                  
-                  return (
-                    <Link
-                      key={token.id}
-                      href={`/results?search=${token.id}`}
-                      className="block p-3 sm:p-4 bg-card hover:bg-card/80 rounded-lg border border-border"
-                    >
-                      <div className="flex items-center gap-3">
-                        <img 
-                          src={imageUrl} 
-                          alt={token.name}
-                          className="w-12 h-12 rounded-lg object-cover"
-                        />
-                        <div className="flex-1">
-                          <div className="flex items-center flex-wrap gap-2">
-                            <h2 className="font-medium">
-                              {token.name} ({token.ticker})
-                            </h2>
-                            <span className={`text-xs px-2 py-0.5 rounded ${risk.color}`}>
-                              {risk.level}
-                            </span>
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {risk.message}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-medium">
-                            ${token.price?.toLocaleString(undefined, {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 8,
-                            }) || '0.00'}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {token.holder_count} holders
-                          </p>
-                        </div>
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
           </div>
+        </div>
+
+        <div className="mt-32 w-full max-w-[489px] flex justify-center">
+          <AdContainer />
         </div>
       </main>
-      <div className="fixed bottom-4 right-4 z-10">
-        <div className="bg-card/80 backdrop-blur-sm border border-border rounded-lg p-3 shadow-lg w-[360px]">
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">
-              Support ODINSMASH ❤️ - Help keep our tools running
-            </p>
-            <div className="flex items-center gap-2">
-              <code className="text-xs text-primary font-mono">
-                bc1q3p7dpmu0s3mmcfj83jf072gjdcf6sqcdf3uk52
-              </code>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }

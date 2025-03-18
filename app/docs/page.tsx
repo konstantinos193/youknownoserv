@@ -33,6 +33,12 @@ export default function DocsPage() {
               </Link>
             </nav>
           </div>
+          <Link 
+            href="https://odin.fun/token/2ait"
+            className="bg-yellow-500 text-black px-3 py-2 rounded-md animate-pulse hover:bg-yellow-600 text-xs sm:text-sm font-semibold absolute right-4 top-1/2 transform -translate-y-1/2"
+          >
+            Buy ODINSMASH
+          </Link>
         </div>
       </header>
 

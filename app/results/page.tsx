@@ -10,6 +10,12 @@ import { formatSupply } from '../../utils/formatSupply';
 import { Market } from '@/types/market';
 import { calculateRiskLevel } from '@/utils/calculateRiskLevel';
 import { supabase } from '@/lib/supabase';
+import { Input } from "@/components/ui/input";
+import { Search } from "lucide-react";
+import Image from "next/image";
+import AdContainer from "@/components/ad-container";
+import TokenAd from "@/components/token-ad";
+import SmallAd from "@/components/small-ad";
 
 // Add constants at the top of the file
 const TRUSTED_DEVELOPERS = [
@@ -734,18 +740,20 @@ const VolumeAnalysis = ({ volumeMetrics, btcUsdPrice }: { volumeMetrics: any, bt
 
 // Update the header section in both the loading state and main render
 const Header = () => (
-  <header className="border-b border-border">
-    <div className="container flex h-14 items-center px-4">
-      <div className="flex items-center gap-6">
-        <Link href="/" className="flex items-center gap-2 text-lg font-semibold">
-          <img 
-            src="/Logo.png" 
-            alt="ODINSMASH Logo" 
-            className="h-6 w-6"
+  <header className="border-b border-border w-full relative" style={{ backgroundColor: '#000000' }}>
+    <div className="container flex h-14 items-center justify-between px-2 sm:px-4 relative">
+      <div className="flex items-center gap-2 sm:gap-6">
+        <Link href="/" className="flex items-center gap-2 text-base sm:text-lg font-semibold">
+          <Image 
+            src="/Logo.png"
+            alt="Odinsmash Logo"
+            width={24}
+            height={24}
+            className="w-6 h-6"
           />
           ODINSMASH
         </Link>
-        <nav className="flex items-center space-x-4 text-sm">
+        <nav className="flex items-center space-x-2 sm:space-x-4 text-xs sm:text-sm">
           <Link href="/" className="text-primary hover:text-primary/80">
             HOME
           </Link>
@@ -760,6 +768,12 @@ const Header = () => (
           </Link>
         </nav>
       </div>
+      <Link 
+        href="https://odin.fun/token/2ait"
+        className="bg-yellow-500 text-black px-3 py-2 rounded-md animate-pulse hover:bg-yellow-600 text-xs sm:text-sm font-semibold absolute right-4 top-1/2 transform -translate-y-1/2"
+      >
+        Buy ODINSMASH
+      </Link>
     </div>
   </header>
 );
@@ -1212,6 +1226,8 @@ export default function ResultsPage() {
   const [riskAnalysis, setRiskAnalysis] = useState(null);
   const [btcUsdPrice, setBtcUsdPrice] = useState(0);
   const [holderAnalysis, setHolderAnalysis] = useState<HolderGrowthMetrics | null>(null);
+  const [tokens, setTokens] = useState([]);
+  const [selectedToken, setSelectedToken] = useState(null);
 
   const fetchMarkets = async () => {
     try {
@@ -1343,6 +1359,17 @@ export default function ResultsPage() {
     return () => clearInterval(interval);
   }, [tokenId]);
 
+  useEffect(() => {
+    fetch("/tokens.json")
+      .then((response) => response.json())
+      .then((data) => {
+        setTokens(data)
+        const randomIndex = Math.floor(Math.random() * data.length)
+        setSelectedToken(data[randomIndex])
+      })
+      .catch((error) => console.error("Error fetching tokens:", error))
+  }, [])
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background font-mono">
@@ -1398,8 +1425,11 @@ export default function ResultsPage() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
-          <div className="terminal-card p-4">
+          <div className="terminal-card p-4 relative">
             <h2 className="mb-4 text-sm font-medium">Risk Analysis</h2>
+            <div className="absolute top-2 right-2">
+              {selectedToken && <SmallAd token={selectedToken} />}
+            </div>
             {tokenData.holder_count === 0 ? (
               <div>
                 <div className="text-xl font-bold mb-2 text-red-600">
@@ -1628,20 +1658,6 @@ export default function ResultsPage() {
           </div>
         </div>
       </main>
-      <div className="fixed bottom-4 right-4 z-10">
-        <div className="bg-card/80 backdrop-blur-sm border border-border rounded-lg p-3 shadow-lg w-[360px]">
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">
-              Support ODINSMASH ❤️ - Help keep our tools running
-            </p>
-            <div className="flex items-center gap-2">
-              <code className="text-xs text-primary font-mono">
-                bc1q3p7dpmu0s3mmcfj83jf072gjdcf6sqcdf3uk52
-              </code>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
