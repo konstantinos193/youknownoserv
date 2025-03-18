@@ -506,7 +506,7 @@ const USER_CREATED_CACHE_KEY = 'user_created_tokens';
 // Update the fetchCreatorTokens function
 async function fetchCreatorTokens(creatorId: string) {
   try {
-    const response = await fetch(`https://odin-smash-server.onrender.com/api/user/${creatorId}/created`, {
+    const response = await fetch(`${API_BASE_URL}/api/user/${creatorId}/created`, {
       headers: {
         'Accept': 'application/json',
         'x-api-key': API_KEY || '', // Add the API key from env
@@ -1154,9 +1154,9 @@ export default function TokensPage() {
 
         {/* Token list */}
         <div className="space-y-3 sm:space-y-4">
-          {loading && !tokens.length ? (
+          {loading ? (
             <TokenListSkeleton />
-          ) : error && !tokens.length ? (
+          ) : error ? (
             <div className="text-center py-8 text-red-500">{error}</div>
           ) : filteredTokens.length > 0 ? (
             filteredTokens.map(token => (
