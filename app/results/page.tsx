@@ -1068,57 +1068,60 @@ const saveHolderData = async (
   }
 };
 
-// Update the calculateNewHolderGrowth function to pass holder addresses
+// Update the calculateNewHolderGrowth function to use the most recent holder data from the database if no data from exactly 24 hours ago is available
 const calculateNewHolderGrowth = async (
   tokenId: string,
   currentHolders: any[]
 ): Promise<HolderGrowthMetrics> => {
   try {
+    // Get current holder data
+    const totalHolderCount = currentHolders.length;
     const now = new Date();
-    const oneDayAgo = new Date(now.getTime() - 25 * 60 * 60 * 1000);
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    // Get total holder count from the API response
-    const totalHolderCount = currentHolders[0]?.count || currentHolders.length;
-    const currentAddresses = currentHolders.map(h => h.user);
-
-    console.log('Debug - Current holders:', {
-      totalCount: totalHolderCount,
-      availableAddresses: currentAddresses.length,
-      addresses: currentAddresses
-    });
-
-    // Get data from 24h ago
-    const { data: previousData } = await supabase
+    // Get the oldest data point within the last 24 hours
+    const { data: historicalData } = await supabase
       .from('holder_history')
       .select('*')
       .eq('token_id', tokenId)
-      .lte('created_at', oneDayAgo.toISOString())
-      .order('created_at', { ascending: false })
+      .gte('created_at', twentyFourHoursAgo.toISOString())
+      .order('created_at', { ascending: true }) // Get oldest first
       .limit(1);
 
-    // If no previous data exists, use 0 as previous count
-    const previousHolderCount = previousData?.[0]?.holder_count || 0;
-    
-    // Calculate growth using the total holder count
+    // If no data in last 24h, use current count as baseline
+    if (!historicalData || historicalData.length === 0) {
+      return {
+        dailyGrowth: {
+          current: totalHolderCount,
+          previous: totalHolderCount,
+          growthRate: 0,
+          newHolders: 0
+        },
+        weeklyGrowth: {
+          current: totalHolderCount,
+          previous: totalHolderCount,
+          growthRate: 0,
+          newHolders: 0
+        },
+        retentionRate: 100
+      };
+    }
+
+    // Use the oldest data point from last 24h
+    const previousHolderCount = historicalData[0].holder_count;
+
+    // Calculate growth metrics
     const netChange = totalHolderCount - previousHolderCount;
     const growthRate = previousHolderCount > 0
       ? (netChange / previousHolderCount) * 100
-      : 100;
+      : 0;
 
-    // Save current data with total holder count
+    // Save current data
     await saveHolderData(tokenId, {
       holder_count: totalHolderCount,
       new_holders: netChange,
       growth_rate: growthRate,
-      holder_addresses: currentAddresses // Save available addresses
-    });
-
-    console.log('Debug - Growth metrics:', {
-      current: totalHolderCount,
-      previous: previousHolderCount,
-      netChange,
-      growthRate,
-      availableAddresses: currentAddresses.length
+      holder_addresses: currentHolders.map(h => h.user)
     });
 
     return {
@@ -1128,18 +1131,18 @@ const calculateNewHolderGrowth = async (
         growthRate: growthRate,
         newHolders: netChange
       },
-      weeklyGrowth: {
-        current: totalHolderCount,
-        previous: previousHolderCount,
-        growthRate: growthRate,
-        newHolders: netChange
-      },
-      retentionRate: 100
-    };
+        weeklyGrowth: {
+          current: totalHolderCount,
+          previous: previousHolderCount,
+          growthRate: growthRate,
+          newHolders: netChange
+        },
+        retentionRate: 100
+      };
 
   } catch (error) {
     console.error('Error calculating holder growth:', error);
-        return {
+    return {
       dailyGrowth: { current: 0, previous: 0, growthRate: 0, newHolders: 0 },
       weeklyGrowth: { current: 0, previous: 0, growthRate: 0, newHolders: 0 },
       retentionRate: 0
