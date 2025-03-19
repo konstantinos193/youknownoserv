@@ -884,17 +884,38 @@ const LoadingRiskAnalysis = () => (
 const LoadingTokenOverview = () => (
   <div className="terminal-card p-4">
     <h2 className="mb-4 text-sm font-medium">Token Overview</h2>
-    <div className="space-y-3">
-      {/* Token info skeleton */}
-      {['Price', 'Supply', 'Creator', 'Market Cap', 'Holders', 'LP'].map((label, i) => (
-        <div key={i} className="flex justify-between items-center">
-          <span className="text-sm text-muted-foreground">{label}</span>
-          <div className="h-4 w-32 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+    <div className="space-y-4">
+      {/* Token info with same structure as actual content */}
+      <div className="space-y-2">
+        <div className="data-row">
+          <span className="data-label">Price</span>
+          <div className="h-4 w-24 bg-gray-700/50 rounded animate-pulse" />
         </div>
-      ))}
-      {/* Trade button skeleton */}
+        <div className="data-row">
+          <span className="data-label">Supply</span>
+          <div className="h-4 w-28 bg-gray-700/50 rounded animate-pulse" />
+        </div>
+        <div className="data-row">
+          <span className="data-label">Creator</span>
+          <div className="h-4 w-32 bg-gray-700/50 rounded animate-pulse" />
+        </div>
+        <div className="data-row">
+          <span className="data-label">Market Cap</span>
+          <div className="h-4 w-24 bg-gray-700/50 rounded animate-pulse" />
+        </div>
+        <div className="data-row">
+          <span className="data-label">Holders</span>
+          <div className="h-4 w-16 bg-gray-700/50 rounded animate-pulse" />
+        </div>
+        <div className="data-row">
+          <span className="data-label">LP</span>
+          <div className="h-4 w-24 bg-gray-700/50 rounded animate-pulse" />
+        </div>
+      </div>
+
+      {/* Trade Button */}
       <div className="pt-4 border-t border-border">
-        <div className="h-9 w-full bg-gradient-to-r from-primary/50 to-primary/30 animate-pulse rounded" />
+        <div className="w-full h-9 bg-primary/30 rounded animate-pulse" />
       </div>
     </div>
   </div>
@@ -1126,44 +1147,67 @@ const calculateNewHolderGrowth = async (
   }
 };
 
-// Update the HolderAnalysisComponent to show more detailed information
-const HolderAnalysisComponent = ({ holderAnalysis }: { holderAnalysis: HolderGrowthMetrics }) => {
+// Update the HolderAnalysisComponent interface
+interface HolderAnalysisProps {
+  holderAnalysis: HolderGrowthMetrics;
+  holderPnL?: {
+    top10: Array<{
+      holder: string;
+      pnl: number;
+      volume: number;
+    }>;
+    totalPnL: number;
+  };
+}
+
+// Add this near the top of the file with other helper functions
+const formatPnL = (value: number): string => {
+  if (value < 1000) {
+    return `$${value.toFixed(2)}`;
+  }
+  if (value >= 1000000) {
+    return `$${(value / 1000000).toFixed(2)}M`;
+  }
+  return `$${(value / 1000).toFixed(2)}K`;
+};
+
+// Update the HolderAnalysisComponent to use the global formatPnL function
+const HolderAnalysisComponent = ({ holderAnalysis, holderPnL }: HolderAnalysisProps) => {
   if (!holderAnalysis) return null;
 
   const { dailyGrowth } = holderAnalysis;
-  const isPositiveGrowth = dailyGrowth.newHolders > 0;
-  const growthColor = isPositiveGrowth ? 'text-green-500' : dailyGrowth.newHolders < 0 ? 'text-red-500' : 'text-gray-500';
+  const totalPnL = holderPnL?.totalPnL || 0;
+  const formattedPnL = formatPnL(totalPnL);
 
   return (
-    <div className="terminal-card p-4">
-      <h2 className="mb-4 text-sm font-medium">Holder Analysis</h2>
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <h3 className="text-xs font-medium text-muted-foreground">24h Growth</h3>
-          <div className="data-row">
-            <span className="data-label">New Holders</span>
-            <span className={growthColor}>
-              {dailyGrowth.newHolders > 0 ? '+' : ''}{dailyGrowth.newHolders}
-            </span>
-          </div>
-          <div className="data-row">
-            <span className="data-label">Growth Rate</span>
-            <span className={growthColor}>
-              {dailyGrowth.growthRate.toFixed(2)}%
-            </span>
-          </div>
-          <div className="data-row">
-            <span className="data-label">Total Holders</span>
-            <span>
-              {dailyGrowth.previous} → {dailyGrowth.current}
-              {dailyGrowth.previous !== dailyGrowth.current && (
-                <span className={`ml-2 ${growthColor}`}>
-                  ({isPositiveGrowth ? '↑' : '↓'})
-                </span>
-              )}
-            </span>
-          </div>
-        </div>
+    <div className="terminal-card p-4 font-mono">
+      <div className="text-base mb-6">Holder Analysis</div>
+      
+      <div className="text-gray-400 mb-2">24h Growth</div>
+      
+      <div className="flex justify-between mb-2">
+        <span className="text-gray-400">New Holders</span>
+        <span className="text-red-500 tabular-nums">{dailyGrowth.newHolders}</span>
+      </div>
+
+      <div className="flex justify-between mb-2">
+        <span className="text-gray-400">Growth Rate</span>
+        <span className="text-red-500 tabular-nums">{dailyGrowth.growthRate.toFixed(2)}%</span>
+      </div>
+
+      <div className="flex justify-between mb-4">
+        <span className="text-gray-400">Total Holders</span>
+        <span className="tabular-nums">
+          {dailyGrowth.previous} → {dailyGrowth.current} 
+          <span className="text-red-500">(↓)</span>
+        </span>
+      </div>
+
+      <div className="flex justify-between mt-4">
+        <span className="text-gray-400">Top 10 PnL</span>
+        <span className="text-green-500 tabular-nums">
+          {formattedPnL}
+        </span>
       </div>
     </div>
   );
@@ -1199,6 +1243,15 @@ const fetchAllHoldersWithPagination = async (tokenId: string, totalHolders: numb
     console.error('Error fetching holders:', error);
     return [];
   }
+};
+
+const formatTopPnLValue = (value: number | undefined | null): string => {
+  if (value === undefined || value === null) return '$0.00';
+  
+  // Always convert to K first
+  const inK = value / 1000;
+  
+  return `$${inK.toFixed(2)}K`;
 };
 
 export default function ResultsPage() {
@@ -1288,34 +1341,30 @@ export default function ResultsPage() {
           return;
         }
 
-        // First get basic token data
-        const response = await fetch(`${API_URL}/api/token-data/${tokenId}`, {
-          headers: {
-            'x-api-key': API_KEY || '',
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          credentials: 'include',
-          mode: 'cors'
-        });
-
+        // Fetch combined data
+        const response = await fetch(`${API_URL}/api/token-data/${tokenId}`);
         if (!response.ok) {
           throw new Error(`Failed to fetch data: ${response.status}`);
         }
 
         const data = await response.json();
-        
-        // Fetch all holders in a single request
-        const allHolders = await fetchAllHoldersWithPagination(tokenId, data.token.holder_count);
-        
-        // Update states with complete data
+
+        // Ensure holders is an array
+        const holders = data.holders?.data || [];
+        const holderPnL = data.holderPnL || {
+          top10: [],
+          totalPnL: 0
+        };
+
+        // Update states
         setTokenData({
           ...data.token,
-          volumeMetrics: data.volumeMetrics
+          volumeMetrics: data.volumeMetrics,
+          holderPnL // Add holderPnL to tokenData
         });
         
-        setHolders(allHolders);
-        setCachedHolders(allHolders);
+        setHolders(holders);
+        setCachedHolders(holders);
         setBtcUsdPrice(data.btcUsdPrice);
         
         setPrice({
@@ -1330,8 +1379,9 @@ export default function ResultsPage() {
           usdPrice: data.price.usdPrice
         });
         
+        // Find creator username
         if (data.token?.creator) {
-          const creatorHolder = allHolders.find(h => h.user === data.token.creator);
+          const creatorHolder = holders.find(h => h.user === data.token.creator);
           if (creatorHolder?.user_username) {
             setCreatorUsername(creatorHolder.user_username);
           } else {
@@ -1342,8 +1392,8 @@ export default function ResultsPage() {
           setCreatorUsername('Unknown');
         }
         
-        // Calculate holder analysis with complete holder list
-        const analysis = await calculateNewHolderGrowth(tokenId, allHolders);
+        // Calculate holder analysis
+        const analysis = await calculateNewHolderGrowth(tokenId, holders);
         setHolderAnalysis(analysis);
 
         setLoading(false);
@@ -1535,7 +1585,10 @@ export default function ResultsPage() {
             
             {/* Holder Analysis */}
             {holderAnalysis ? (
-              <HolderAnalysisComponent holderAnalysis={holderAnalysis} />
+              <HolderAnalysisComponent 
+                holderAnalysis={holderAnalysis} 
+                holderPnL={tokenData?.holderPnL}
+              />
             ) : (
               <div className="terminal-card p-4">
                 <h2 className="mb-4 text-sm font-medium">Holder Analysis</h2>
@@ -1613,43 +1666,54 @@ export default function ResultsPage() {
                     <th className="text-left p-2">Holder</th>
                     <th className="text-left p-2">Amount</th>
                     <th className="text-left p-2">Percentage</th>
+                    <th className="text-left p-2">PnL</th>
                   </tr>
                 </thead>
                 <tbody>
                   {holders.length > 0 ? (
-                    holders.slice(0, 5).map((holder, index) => {
-                      // Fix balance calculation to match server
-                      const adjustedBalance = Number(holder.balance) / 1e11;
-                      const totalSupply = Number(tokenData.total_supply) / 1e11; // Match the same divisor
-                      const percentage = (adjustedBalance / totalSupply * 100).toFixed(2);
-                      
-                      return (
-                        <tr key={index}>
-                          <td className="p-2">
-                            <Link 
-                              href={`https://odin.fun/user/${holder.user}`}
-                              target="_blank"
-                              className="text-primary hover:underline"
-                            >
-                              {holder.user_username}
-                            </Link>
-                            {holder.user === tokenData.creator && <span className="text-white"> (dev)</span>}
-                          </td>
-                          <td className="p-2">
-                            {adjustedBalance >= 1e6 
-                              ? `${(adjustedBalance / 1e6).toFixed(2)}M`
-                              : adjustedBalance >= 1e3 
-                                ? `${(adjustedBalance / 1e3).toFixed(2)}K`
-                                : adjustedBalance.toFixed(2)
-                            }
-                          </td>
-                          <td className="p-2">{percentage}%</td>
-                        </tr>
-                      );
-                    })
+                    holders
+                      .slice(0, 5)
+                      .map((holder, index) => {
+                        const adjustedBalance = Number(holder.balance) / 1e11;
+                        const totalSupply = Number(tokenData.total_supply) / 1e11;
+                        const percentage = (adjustedBalance / totalSupply * 100).toFixed(2);
+                        
+                        // Find PnL data for this holder
+                        const holderPnLData = tokenData?.holderPnL?.top10?.find(
+                          h => h.holder === holder.user
+                        );
+                        const pnl = holderPnLData?.pnl || 0;
+                        
+                        return (
+                          <tr key={index}>
+                            <td className="p-2">
+                              <Link 
+                                href={`https://odin.fun/user/${holder.user}`}
+                                target="_blank"
+                                className="text-primary hover:underline"
+                              >
+                                {holder.user_username || holder.user}
+                              </Link>
+                              {holder.user === tokenData.creator && <span className="text-white"> (dev)</span>}
+                            </td>
+                            <td className="p-2">
+                              {adjustedBalance >= 1e6 
+                                ? `${(adjustedBalance / 1e6).toFixed(2)}M`
+                                : adjustedBalance >= 1e3 
+                                  ? `${(adjustedBalance / 1e3).toFixed(2)}K`
+                                  : adjustedBalance.toFixed(2)
+                              }
+                            </td>
+                            <td className="p-2">{percentage}%</td>
+                            <td className={`p-2 ${pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                              {formatPnL(pnl)}
+                            </td>
+                          </tr>
+                        );
+                      })
                   ) : (
                     <tr>
-                      <td colSpan={3} className="text-center p-2">No holder data available.</td>
+                      <td colSpan={4} className="text-center p-2">No holder data available.</td>
                     </tr>
                   )}
                 </tbody>
