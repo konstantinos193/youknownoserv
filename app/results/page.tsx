@@ -1068,38 +1068,77 @@ const saveHolderData = async (
   }
 };
 
-// Update the calculateNewHolderGrowth function to use the most recent holder data from the database if no data from exactly 24 hours ago is available
+// Remove the old fetchAllHoldersWithPagination function and replace it with this simpler version
+const fetchAllHoldersWithPagination = async (tokenId: string) => {
+  try {
+    const response = await fetch(
+      `${API_URL}/api/token/${tokenId}/owners`,
+      {
+        headers: {
+          'x-api-key': API_KEY || '',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Origin': 'https://odinsmash.com',
+          'Referer': 'https://odinsmash.com/'
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch holders');
+    }
+
+    const data = await response.json();
+    return data.data || [];
+
+  } catch (error) {
+    console.error('Error fetching all holders:', error);
+    return [];
+  }
+};
+
+// Update the calculateNewHolderGrowth function
 const calculateNewHolderGrowth = async (
   tokenId: string,
   currentHolders: any[]
 ): Promise<HolderGrowthMetrics> => {
   try {
-    // Get current holder data
-    const totalHolderCount = currentHolders.length;
+    // Fetch all holders using pagination
+    const allHolders = await fetchAllHoldersWithPagination(tokenId);
+    const totalHolderCount = allHolders.length;
+    
     const now = new Date();
     const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    // Get the oldest data point within the last 24 hours
+    // Get the most recent historical data point from before 24 hours ago
     const { data: historicalData } = await supabase
       .from('holder_history')
       .select('*')
       .eq('token_id', tokenId)
-      .gte('created_at', twentyFourHoursAgo.toISOString())
-      .order('created_at', { ascending: true }) // Get oldest first
+      .lt('created_at', twentyFourHoursAgo.toISOString())
+      .order('created_at', { ascending: false })
       .limit(1);
 
-    // If no data in last 24h, use current count as baseline
+    // If no historical data exists at all, return zeros
     if (!historicalData || historicalData.length === 0) {
+      // Save current data with all holders
+      await saveHolderData(tokenId, {
+        holder_count: totalHolderCount,
+        new_holders: totalHolderCount,
+        growth_rate: 0,
+        holder_addresses: allHolders.map(h => h.user)
+      });
+
       return {
         dailyGrowth: {
           current: totalHolderCount,
-          previous: totalHolderCount,
+          previous: 0,
           growthRate: 0,
           newHolders: 0
         },
         weeklyGrowth: {
           current: totalHolderCount,
-          previous: totalHolderCount,
+          previous: 0,
           growthRate: 0,
           newHolders: 0
         },
@@ -1107,7 +1146,7 @@ const calculateNewHolderGrowth = async (
       };
     }
 
-    // Use the oldest data point from last 24h
+    // Use the last available data point before 24 hours ago
     const previousHolderCount = historicalData[0].holder_count;
 
     // Calculate growth metrics
@@ -1116,12 +1155,12 @@ const calculateNewHolderGrowth = async (
       ? (netChange / previousHolderCount) * 100
       : 0;
 
-    // Save current data
+    // Save current data with all holders
     await saveHolderData(tokenId, {
       holder_count: totalHolderCount,
       new_holders: netChange,
       growth_rate: growthRate,
-      holder_addresses: currentHolders.map(h => h.user)
+      holder_addresses: allHolders.map(h => h.user)
     });
 
     return {
@@ -1214,38 +1253,6 @@ const HolderAnalysisComponent = ({ holderAnalysis, holderPnL }: HolderAnalysisPr
       </div>
     </div>
   );
-};
-
-// Simplify the fetchAllHoldersWithPagination function
-const fetchAllHoldersWithPagination = async (tokenId: string, totalHolders: number) => {
-  try {
-    // Use a more reasonable limit (1000 is typically good)
-    const response = await fetch(
-      `${API_URL}/api/token/${tokenId}/owners?limit=20000`,
-      {
-        headers: {
-          'x-api-key': API_KEY || '',
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Origin': 'https://odinsmash.com',
-          'Referer': 'https://odinsmash.com/'
-        },
-        cache: 'no-store'
-      }
-    );
-
-    if (!response.ok) {
-      console.error('Failed to fetch holders:', response.status);
-      return [];
-    }
-
-    const data = await response.json();
-    console.log(`Fetched ${data.data?.length || 0} holders out of ${data.count}`);
-    return data.data || [];
-  } catch (error) {
-    console.error('Error fetching holders:', error);
-    return [];
-  }
 };
 
 const formatTopPnLValue = (value: number | undefined | null): string => {
