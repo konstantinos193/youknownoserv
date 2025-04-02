@@ -4,18 +4,15 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation'; // Import useSearchParams from Next.js
 import Link from "next/link"; // Ensure this is only declared once
-import { Button } from "@/components/ui/button";
+import { Button } from "/components/ui/button";
 import { ArrowLeft, ExternalLink, Globe, X, Send } from "lucide-react";
 import { formatSupply } from '../../utils/formatSupply';
 import { Market } from '@/types/market';
 import { calculateRiskLevel } from '@/utils/calculateRiskLevel';
-import { supabase } from '@/lib/supabase';
-import { Input } from "@/components/ui/input";
+import { supabase } from '/lib/supabase';
+import { Input } from "./components/ui/input";
 import { Search } from "lucide-react";
 import Image from "next/image";
-import AdContainer from "@/components/ad-container";
-import TokenAd from "@/components/token-ad";
-import SmallAd from "@/components/small-ad";
 
 // Add constants at the top of the file
 const TRUSTED_DEVELOPERS = [
@@ -162,6 +159,8 @@ const API_KEY = process.env.NEXT_PUBLIC_API_KEY;
 
 // Update the API_URL constant to use environment variable with fallback
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+console.log("API_URL:", API_URL);
 
 // Update the fetchWithRetry function to include CORS headers
 const fetchWithRetry = async (url: string, options = {}) => {
@@ -472,26 +471,26 @@ const calculateVolumeMetrics = (trades: any[]) => {
 
 // Add this loading skeleton for the risk analysis section
 const RiskAnalysisSkeleton = () => (
-  <div className="animate-pulse">
+  <div className="animate-pulse bg-blue-900 p-4 rounded-lg border border-blue-800">
     {/* Risk Level Skeleton */}
     <div className="text-xl font-bold mb-2">
-      <div className="h-7 w-40 bg-gray-700/50 rounded" />
+      <div className="h-7 w-40 bg-gradient-to-r from-red-700/50 to-red-600/50 animate-pulse rounded" />
     </div>
     
     {/* Warning Skeleton */}
     <div className="text-sm font-medium mb-2">
-      <div className="h-5 w-64 bg-gray-700/50 rounded" />
+      <div className="h-5 w-64 bg-gradient-to-r from-blue-800/50 to-blue-700/50 animate-pulse rounded" />
     </div>
     
     {/* Message Skeleton */}
     <div className="text-sm text-gray-400 mb-4">
-      <div className="h-4 w-full bg-gray-700/50 rounded" />
+      <div className="h-4 w-full bg-gradient-to-r from-blue-800/50 to-blue-700/50 animate-pulse rounded" />
     </div>
     
     {/* Stats Skeleton */}
     <div className="mt-4 text-sm text-gray-400 space-y-2">
       {[1, 2, 3].map((i) => (
-        <div key={i} className="h-4 w-72 bg-gray-700/50 rounded" />
+        <div key={i} className="h-4 w-72 bg-gradient-to-r from-blue-800/50 to-blue-700/50 animate-pulse rounded" />
       ))}
     </div>
   </div>
@@ -595,7 +594,7 @@ const AsyncRiskAnalysis = ({
         else if (devPercentage >= 50 || top5Percentage >= 70) {
           riskAssessment = {
             level: "EXTREME RISK",
-            color: "text-red-600",
+            color: "text-red-500",
             message: "Extremely high centralization. High probability of price manipulation.",
             warning: holderStats,
             stats: { devPercentage, top5Percentage, top10Percentage }
@@ -652,11 +651,11 @@ const AsyncRiskAnalysis = ({
   }, [holders, totalSupply, creatorId, tokenId, onRiskUpdate, totalHolders]);
 
   if (!risk) {
-    return <div className="text-gray-400">Calculating risk...</div>;
+    return <div className="text-gray-400 bg-blue-900 p-4 rounded-lg border border-blue-800">LOADING</div>;
   }
 
   return (
-    <div>
+    <div className="bg-blue-900 p-4 rounded-lg border border-blue-800">
       <div className={`text-xl font-bold mb-2 ${risk.color}`}>
         {risk.level}
       </div>
@@ -702,7 +701,7 @@ const VolumeAnalysis = ({ volumeMetrics, btcUsdPrice }: { volumeMetrics: any, bt
   console.log('Processed metrics:', metrics);
 
   return (
-    <div className="terminal-card p-4">
+    <div className="terminal-card p-4 relative bg-blue-900 border border-blue-800">
       <h2 className="mb-4 text-sm font-medium">Volume Analysis</h2>
       <div className="space-y-2 text-sm">
         <div className="data-row">
@@ -740,40 +739,40 @@ const VolumeAnalysis = ({ volumeMetrics, btcUsdPrice }: { volumeMetrics: any, bt
 
 // Update the header section in both the loading state and main render
 const Header = () => (
-  <header className="border-b border-border w-full relative" style={{ backgroundColor: '#000000' }}>
+  <header className="border-b border-blue-800 w-full relative" style={{ backgroundColor: '#1e3a8a' }}>
     <div className="container flex h-14 items-center justify-between px-2 sm:px-4 relative">
       <div className="flex items-center gap-2 sm:gap-6">
         <Link href="/" className="flex items-center gap-2 text-base sm:text-lg font-semibold">
           <Image 
-            src="/Logo.png"
-            alt="Odinsmash Logo"
-            width={24}
-            height={24}
-            className="w-6 h-6"
+            src="https://i.postimg.cc/7hkYw7PM/image-removebg-preview.png"
+            alt="Token Detective Logo"
+            width={48}
+            height={48}
+            className="w-12 h-12"
           />
-          ODINSMASH
+          Token Detective
         </Link>
         <nav className="flex items-center space-x-2 sm:space-x-4 text-xs sm:text-sm">
-          <Link href="/" className="text-primary hover:text-primary/80">
+          <Link href="/" className="text-blue-300 hover:text-blue-100">
             HOME
           </Link>
-          <Link href="/tokens" className="text-muted-foreground hover:text-foreground">
+          <Link href="/tokens" className="text-blue-400/80 hover:text-blue-200">
             TOKENS
           </Link>
-          <Link href="/extension" className="text-muted-foreground hover:text-foreground">
-            EXTENSION
-          </Link>
-          <Link href="/docs" className="text-muted-foreground hover:text-foreground">
-            DOCS
-          </Link>
+          <div className="relative">
+            <span className="text-blue-400/50 cursor-not-allowed">WHALE ACTIVITY</span>
+            <div className="absolute -top-3 -right-8 bg-blue-600 px-1.5 py-0.5 rounded-full text-[10px] font-medium">
+              Soon
+            </div>
+          </div>
         </nav>
       </div>
-      <Link 
-        href="https://odin.fun/token/2ait"
-        className="bg-yellow-500 text-black px-3 py-2 rounded-md animate-pulse hover:bg-yellow-600 text-xs sm:text-sm font-semibold absolute right-4 top-1/2 transform -translate-y-1/2"
+      <button 
+        disabled
+        className="bg-blue-600/50 text-blue-200/70 px-3 py-2 rounded-md text-xs sm:text-sm font-semibold cursor-not-allowed absolute right-4 top-1/2 transform -translate-y-1/2"
       >
-        Buy ODINSMASH
-      </Link>
+        Buy Token Detective
+      </button>
     </div>
   </header>
 );
@@ -834,23 +833,23 @@ const SocialLinks = ({ twitter, website, telegram }: { twitter?: string, website
 const LoadingHeader = () => (
   <div className="mb-6 flex items-center gap-3">
     {/* Token image skeleton */}
-    <div className="h-[60px] w-[60px] lg:h-[110px] lg:w-[110px] bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded-lg" />
+    <div className="h-[60px] w-[60px] lg:h-[110px] lg:w-[110px] bg-gradient-to-r from-blue-900/50 to-blue-800/50 animate-pulse rounded-lg" />
     
     <div className="flex flex-col gap-2 flex-1">
       {/* Token name skeleton */}
       <div className="flex items-center gap-2">
-        <div className="h-6 w-32 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+        <div className="h-6 w-32 bg-gradient-to-r from-blue-900/50 to-blue-800/50 animate-pulse rounded" />
       </div>
       {/* Description skeleton - multiple lines */}
       <div className="space-y-2">
-        <div className="h-4 w-full bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
-        <div className="h-4 w-3/4 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+        <div className="h-4 w-full bg-gradient-to-r from-blue-900/50 to-blue-800/50 animate-pulse rounded" />
+        <div className="h-4 w-3/4 bg-gradient-to-r from-blue-900/50 to-blue-800/50 animate-pulse rounded" />
       </div>
       {/* Social links skeleton */}
       <div className="flex items-center gap-3 mt-2">
-        <div className="h-4 w-4 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded-full" />
-        <div className="h-4 w-4 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded-full" />
-        <div className="h-4 w-4 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded-full" />
+        <div className="h-4 w-4 bg-gradient-to-r from-blue-900/50 to-blue-800/50 animate-pulse rounded-full" />
+        <div className="h-4 w-4 bg-gradient-to-r from-blue-900/50 to-blue-800/50 animate-pulse rounded-full" />
+        <div className="h-4 w-4 bg-gradient-to-r from-blue-900/50 to-blue-800/50 animate-pulse rounded-full" />
       </div>
     </div>
   </div>
@@ -858,21 +857,21 @@ const LoadingHeader = () => (
 
 // Update the LoadingRiskAnalysis component
 const LoadingRiskAnalysis = () => (
-  <div className="terminal-card p-4">
+  <div className="terminal-card p-4 bg-blue-900 border border-blue-800">
     <h2 className="mb-4 text-sm font-medium">Risk Analysis</h2>
     <div className="space-y-4">
       {/* Risk level skeleton */}
       <div className="h-7 w-40 bg-gradient-to-r from-red-700/50 to-red-600/50 animate-pulse rounded" />
       {/* Warning message skeleton */}
-      <div className="h-5 w-64 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+      <div className="h-5 w-64 bg-gradient-to-r from-blue-800/50 to-blue-700/50 animate-pulse rounded" />
       {/* Description skeleton */}
-      <div className="h-4 w-full bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+      <div className="h-4 w-full bg-gradient-to-r from-blue-800/50 to-blue-700/50 animate-pulse rounded" />
       {/* Stats skeleton */}
       <div className="space-y-2 mt-4">
         {[1, 2, 3].map((i) => (
           <div key={i} className="flex items-center justify-between">
-            <div className="h-4 w-32 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
-            <div className="h-4 w-16 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+            <div className="h-4 w-32 bg-gradient-to-r from-blue-800/50 to-blue-700/50 animate-pulse rounded" />
+            <div className="h-4 w-16 bg-gradient-to-r from-blue-800/50 to-blue-700/50 animate-pulse rounded" />
           </div>
         ))}
       </div>
@@ -882,40 +881,40 @@ const LoadingRiskAnalysis = () => (
 
 // Update the LoadingTokenOverview component
 const LoadingTokenOverview = () => (
-  <div className="terminal-card p-4">
+  <div className="terminal-card p-4 bg-blue-900 border border-blue-800">
     <h2 className="mb-4 text-sm font-medium">Token Overview</h2>
     <div className="space-y-4">
       {/* Token info with same structure as actual content */}
       <div className="space-y-2">
         <div className="data-row">
           <span className="data-label">Price</span>
-          <div className="h-4 w-24 bg-gray-700/50 rounded animate-pulse" />
+          <div className="h-4 w-24 bg-blue-800/50 rounded animate-pulse" />
         </div>
         <div className="data-row">
           <span className="data-label">Supply</span>
-          <div className="h-4 w-28 bg-gray-700/50 rounded animate-pulse" />
+          <div className="h-4 w-28 bg-blue-800/50 rounded animate-pulse" />
         </div>
         <div className="data-row">
           <span className="data-label">Creator</span>
-          <div className="h-4 w-32 bg-gray-700/50 rounded animate-pulse" />
+          <div className="h-4 w-32 bg-blue-800/50 rounded animate-pulse" />
         </div>
         <div className="data-row">
           <span className="data-label">Market Cap</span>
-          <div className="h-4 w-24 bg-gray-700/50 rounded animate-pulse" />
+          <div className="h-4 w-24 bg-blue-800/50 rounded animate-pulse" />
         </div>
         <div className="data-row">
           <span className="data-label">Holders</span>
-          <div className="h-4 w-16 bg-gray-700/50 rounded animate-pulse" />
+          <div className="h-4 w-16 bg-blue-800/50 rounded animate-pulse" />
         </div>
         <div className="data-row">
           <span className="data-label">LP</span>
-          <div className="h-4 w-24 bg-gray-700/50 rounded animate-pulse" />
+          <div className="h-4 w-24 bg-blue-800/50 rounded animate-pulse" />
         </div>
       </div>
 
       {/* Trade Button */}
       <div className="pt-4 border-t border-border">
-        <div className="w-full h-9 bg-primary/30 rounded animate-pulse" />
+        <div className="w-full h-9 bg-blue-700/30 rounded animate-pulse" />
       </div>
     </div>
   </div>
@@ -923,7 +922,7 @@ const LoadingTokenOverview = () => (
 
 // Update the LoadingMarkets component
 const LoadingMarkets = () => (
-  <div className="terminal-card p-4 md:col-span-2">
+  <div className="terminal-card p-4 md:col-span-2 bg-blue-900 border border-blue-800">
     <h2 className="mb-4 text-sm font-medium">Markets</h2>
     <div className="overflow-x-auto">
       <table className="w-full">
@@ -939,18 +938,18 @@ const LoadingMarkets = () => (
             <tr key={i}>
               <td className="p-2">
                 <div className="flex items-center gap-2">
-                  <div className="h-4 w-4 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
-                  <div className="h-4 w-20 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+                  <div className="h-4 w-4 bg-gradient-to-r from-blue-800/50 to-blue-700/50 animate-pulse rounded" />
+                  <div className="h-4 w-20 bg-gradient-to-r from-blue-800/50 to-blue-700/50 animate-pulse rounded" />
                 </div>
               </td>
               <td className="p-2">
-                <div className="h-4 w-24 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+                <div className="h-4 w-24 bg-gradient-to-r from-blue-800/50 to-blue-700/50 animate-pulse rounded" />
               </td>
               <td className="p-2">
-                <div className="h-4 w-28 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+                <div className="h-4 w-28 bg-gradient-to-r from-blue-800/50 to-blue-700/50 animate-pulse rounded" />
               </td>
               <td className="p-2">
-                <div className="h-4 w-16 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+                <div className="h-4 w-16 bg-gradient-to-r from-blue-800/50 to-blue-700/50 animate-pulse rounded" />
               </td>
             </tr>
           ))}
@@ -962,7 +961,7 @@ const LoadingMarkets = () => (
 
 // Update the LoadingHolders component
 const LoadingHolders = () => (
-  <div className="terminal-card p-4 md:col-span-2">
+  <div className="terminal-card p-4 md:col-span-2 bg-blue-900 border border-blue-800">
     <h2 className="mb-4 text-sm font-medium">Top Holders</h2>
     <div className="overflow-x-auto">
       <table className="w-full">
@@ -977,13 +976,13 @@ const LoadingHolders = () => (
           {[1, 2, 3, 4, 5].map((i) => (
             <tr key={i}>
               <td className="p-2">
-                <div className="h-4 w-32 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+                <div className="h-4 w-32 bg-gradient-to-r from-blue-800/50 to-blue-700/50 animate-pulse rounded" />
               </td>
               <td className="p-2">
-                <div className="h-4 w-24 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+                <div className="h-4 w-24 bg-gradient-to-r from-blue-800/50 to-blue-700/50 animate-pulse rounded" />
               </td>
               <td className="p-2">
-                <div className="h-4 w-16 bg-gradient-to-r from-gray-700/50 to-gray-600/50 animate-pulse rounded" />
+                <div className="h-4 w-16 bg-gradient-to-r from-blue-800/50 to-blue-700/50 animate-pulse rounded" />
               </td>
             </tr>
           ))}
@@ -1222,7 +1221,7 @@ const HolderAnalysisComponent = ({ holderAnalysis, holderPnL }: HolderAnalysisPr
   const formattedPnL = formatPnL(totalPnL);
 
   return (
-    <div className="terminal-card p-4 font-mono">
+    <div className="terminal-card p-4 font-mono bg-blue-900 border border-blue-800">
       <div className="text-base mb-6">Holder Analysis</div>
       
       <div className="text-gray-400 mb-2">24h Growth</div>
@@ -1264,6 +1263,32 @@ const formatTopPnLValue = (value: number | undefined | null): string => {
   return `$${inK.toFixed(2)}K`;
 };
 
+const calculatePnL = async (holders: any[], tokenData: any) => {
+  // Assuming you have a function to fetch PnL data for holders
+  const pnlPromises = holders.map(holder => fetchPnLForHolder(holder.user));
+  const pnlData = await Promise.all(pnlPromises);
+
+  return holders.map((holder, index) => ({
+    ...holder,
+    pnl: pnlData[index] || 0
+  }));
+};
+
+// Define the fetchPnLForHolder function
+const fetchPnLForHolder = async (holderId: string) => {
+  try {
+    const response = await fetch(`${API_URL}/api/holder/${holderId}/pnl?tokenId=${tokenId}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch PnL');
+    }
+    const data = await response.json();
+    return data.pnl || 0;
+  } catch (error) {
+    console.error('Error fetching PnL:', error);
+    return 0;
+  }
+};
+
 export default function ResultsPage() {
   const searchParams = useSearchParams();
   const searchUrl = searchParams.get('search');
@@ -1289,8 +1314,6 @@ export default function ResultsPage() {
   const [riskAnalysis, setRiskAnalysis] = useState(null);
   const [btcUsdPrice, setBtcUsdPrice] = useState(0);
   const [holderAnalysis, setHolderAnalysis] = useState<HolderGrowthMetrics | null>(null);
-  const [tokens, setTokens] = useState([]);
-  const [selectedToken, setSelectedToken] = useState(null);
 
   const fetchMarkets = async () => {
     try {
@@ -1420,19 +1443,22 @@ export default function ResultsPage() {
   }, [tokenId]);
 
   useEffect(() => {
-    fetch("/tokens.json")
-      .then((response) => response.json())
-      .then((data) => {
-        setTokens(data)
-        const randomIndex = Math.floor(Math.random() * data.length)
-        setSelectedToken(data[randomIndex])
-      })
-      .catch((error) => console.error("Error fetching tokens:", error))
-  }, [])
+    const fetchData = async () => {
+      try {
+        const holders = await fetchAllHoldersWithPagination(tokenId);
+        const holdersWithPnL = await calculatePnL(holders, tokenData);
+        setHolders(holdersWithPnL);
+      } catch (error) {
+        console.error('Error fetching holders with PnL:', error);
+      }
+    };
+
+    fetchData();
+  }, [tokenId, tokenData]);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background font-mono">
+      <div className="min-h-screen bg-blue-950 font-mono">
         <Header />
         <main className="container px-4 py-8">
           <LoadingHeader />
@@ -1453,7 +1479,7 @@ export default function ResultsPage() {
   const imageUrl = `https://images.odin.fun/token/${tokenId}`;
 
   return (
-    <div className="min-h-screen bg-background font-mono">
+    <div className="min-h-screen bg-blue-950 font-mono">
       <Header />
       <main className="container px-4 py-8">
         <div className="mb-6 flex items-center gap-3">
@@ -1485,13 +1511,13 @@ export default function ResultsPage() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
-          <div className="terminal-card p-4 relative">
+          <div className="terminal-card p-4 relative bg-blue-900 border border-blue-800">
             <h2 className="mb-4 text-sm font-medium">Risk Analysis</h2>
             <div className="absolute top-2 right-2">
-              {selectedToken && <SmallAd token={selectedToken} />}
+              {/* Remove SmallAd component */}
             </div>
             {tokenData.holder_count === 0 ? (
-              <div>
+              <div className="bg-blue-900 p-4 rounded-lg border border-blue-800">
                 <div className="text-xl font-bold mb-2 text-red-600">
                   RUGGED
                 </div>
@@ -1513,11 +1539,11 @@ export default function ResultsPage() {
                 tokenData={tokenData}
               />
             ) : (
-              <div className="text-gray-400">LOADING</div>
+              <div className="text-gray-400 bg-blue-900 p-4 rounded-lg border border-blue-800">LOADING</div>
             )}
           </div>
 
-          <div className="terminal-card p-4">
+          <div className="terminal-card p-4 bg-blue-900 border border-blue-800">
             <h2 className="mb-4 text-sm font-medium">Token Overview</h2>
             <div className="space-y-4">
               {/* Token info */}
@@ -1569,7 +1595,7 @@ export default function ResultsPage() {
                   target="_blank"
                   className="w-full"
                 >
-                  <Button className="w-full bg-primary hover:bg-primary/90">
+                  <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">
                     Trade on Odin.fun
                   </Button>
                 </Link>
@@ -1600,7 +1626,7 @@ export default function ResultsPage() {
                 holderPnL={tokenData?.holderPnL}
               />
             ) : (
-              <div className="terminal-card p-4">
+              <div className="terminal-card p-4 bg-blue-900 border border-blue-800">
                 <h2 className="mb-4 text-sm font-medium">Holder Analysis</h2>
                 <div className="text-sm text-gray-400">Loading analysis data...</div>
               </div>
@@ -1608,7 +1634,7 @@ export default function ResultsPage() {
           </div>
 
           {/* Markets */}
-          <div className="terminal-card p-4 md:col-span-2">
+          <div className="terminal-card p-4 md:col-span-2 bg-blue-900 border border-blue-800">
             <h2 className="mb-4 text-sm font-medium">Markets</h2>
             <div className="overflow-x-auto">
               <table className="w-full border-collapse">
@@ -1667,7 +1693,7 @@ export default function ResultsPage() {
           </div>
 
           {/* Top Holders */}
-          <div className="terminal-card p-4 md:col-span-2">
+          <div className="terminal-card p-4 md:col-span-2 bg-blue-900 border border-blue-800">
             <h2 className="mb-4 text-sm font-medium">Top Holders</h2>
             <div className="overflow-x-auto">
               <table className="w-full border-collapse">

@@ -1,5 +1,5 @@
 "use client"
-import TokenAd from "@/components/token-ad"
+import TokenAd from "/components/token-ad"
 import { useEffect, useState } from "react"
 
 interface AdContainerProps {

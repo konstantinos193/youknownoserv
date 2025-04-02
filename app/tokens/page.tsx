@@ -1,8 +1,8 @@
 'use client';
 
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { Button } from "/components/ui/button"
+import { Input } from "/components/ui/input"
 import { Search, ArrowUpDown, Filter, Globe, Send } from "lucide-react"
 import { useState, useEffect, useCallback } from 'react';
 import { 
@@ -61,16 +61,20 @@ let isProcessingQueue = false;
 const processQueue = async () => {
   if (isProcessingQueue || requestQueue.length === 0) return;
   isProcessingQueue = true;
+  console.log("Processing request queue...");
 
   while (requestQueue.length > 0) {
     const batch = requestQueue.splice(0, BATCH_SIZE);
+    console.log(`Processing batch of ${batch.length} requests...`);
     await Promise.all(batch.map(fn => fn()));
     if (requestQueue.length > 0) {
+      console.log("Waiting before processing next batch...");
       await new Promise(resolve => setTimeout(resolve, REQUEST_THROTTLE_DELAY));
     }
   }
 
   isProcessingQueue = false;
+  console.log("Finished processing request queue.");
 };
 
 // Update fetchWithRetry to handle 404s more gracefully
@@ -149,6 +153,8 @@ const fetchWithRetry = async (url: string) => {
             console.warn('Cache write error:', error);
           }
 
+          // Log successful fetch
+          console.log(`Successfully fetched data from ${fullUrl}`);
           return resolve(data.data);
         } catch (error) {
           console.error(`Attempt ${attempt + 1}/${maxRetries} failed for ${url}:`, error);
@@ -161,12 +167,13 @@ const fetchWithRetry = async (url: string) => {
     };
 
     requestQueue.push(executeFetch);
-    processQueue();
+    console.log(`Added request to queue for URL: ${url}`); // Log when a request is added
+    processQueue(); // Ensure the queue is processed immediately
   });
 };
 
 // Update the processHolderData function
-async function processHolderData(holders: any[], token: Token): Promise<RiskAssessment> {
+const processHolderData = async (holders: any[], token: Token): Promise<RiskAssessment> => {
   // Check for zero holders first
   if (!token.holder_count || token.holder_count === 0) {
     return {
@@ -434,26 +441,30 @@ const fetchTokenHolders = async (tokenIds: string | string[], creatorId: string)
     const cachedHolders = ids.map(id => getCachedHolders(id)).filter(Boolean);
     if (cachedHolders.length === ids.length) {
       return cachedHolders.reduce((acc, holders, index) => {
-        acc[ids[index]] = { data: holders };
+        acc[ids[index]] = { holders };
         return acc;
-      }, {});
+      }, {} as Record<string, { holders: any[] }>);
     }
 
+    // Log before sending batch request
+    console.log(`Fetching holders for tokens: ${JSON.stringify(ids)}`);
+    
     const response = await fetch(
       `${API_BASE_URL}/api/batch-holders?tokenIds=${JSON.stringify(ids)}`,
       {
         headers: {
-          'x-api-key': API_KEY
+          'x-api-key': API_KEY || '',
+          'Accept': 'application/json'
         }
       }
     );
 
     if (!response.ok) {
-      // Return empty holders array instead of throwing
+      console.warn(`Failed to fetch holders for tokens: ${JSON.stringify(ids)}`);
       return ids.reduce((acc, id) => {
-        acc[id] = { data: [] };
+        acc[id] = { holders: [] };
         return acc;
-      }, {});
+      }, {} as Record<string, { holders: any[] }>);
     }
 
     const holdersMap = await response.json();
@@ -461,26 +472,26 @@ const fetchTokenHolders = async (tokenIds: string | string[], creatorId: string)
     // Ensure each token has at least an empty array
     ids.forEach(id => {
       if (!holdersMap[id]) {
-        holdersMap[id] = { data: [] };
+        holdersMap[id] = { holders: [] };
       }
     });
     
     // Process each token's holders
-    Object.entries(holdersMap).forEach(([tokenId, holdersData]) => {
-      const holdersArray = Array.isArray(holdersData?.data) ? holdersData.data : [];
+    Object.entries(holdersMap).forEach(([tokenId, data]) => {
+      const holdersArray = data?.holders || [];
       
       // Normalize creatorId and holder addresses for comparison
       const normalizedCreatorId = creatorId.toLowerCase().trim();
       
       // Find the creator's holdings with normalized comparison
       const creatorHoldings = holdersArray.find(h => 
-        h.user.toLowerCase().trim() === normalizedCreatorId
+        h.user?.toLowerCase().trim() === normalizedCreatorId
       );
       
       const devHoldings = creatorHoldings?.balance || 0;
       
       holdersMap[tokenId] = {
-        data: holdersArray,
+        holders: holdersArray,
         devHoldings: Number(devHoldings)
       };
       
@@ -490,13 +501,12 @@ const fetchTokenHolders = async (tokenIds: string | string[], creatorId: string)
     return holdersMap;
   } catch (error) {
     console.error('Error fetching holders:', error);
-    // Return empty holders array for all tokens instead of empty object
     return Array.isArray(tokenIds) ? 
       tokenIds.reduce((acc, id) => {
-        acc[id] = { data: [] };
+        acc[id] = { holders: [] };
         return acc;
-      }, {}) :
-      { [tokenIds]: { data: [] } };
+      }, {} as Record<string, { holders: any[] }>) :
+      { [tokenIds]: { holders: [] } };
   }
 };
 
@@ -679,25 +689,25 @@ const TokenListSkeleton = () => {
   return (
     <div className="space-y-3">
       {[1, 2, 3, 4, 5].map((i) => (
-        <div key={i} className="p-3 sm:p-4 bg-card hover:bg-card/80 rounded-lg border border-border animate-pulse">
+        <div key={i} className="p-3 sm:p-4 bg-blue-900 hover:bg-blue-800 rounded-lg border border-blue-800 animate-pulse">
           <div className="flex items-center gap-3">
             {/* Token image skeleton */}
-            <div className="w-12 h-12 rounded-lg bg-gray-700" />
+            <div className="w-12 h-12 rounded-lg bg-blue-800" />
             
             <div className="flex-1">
               {/* Name and risk level skeleton */}
               <div className="flex items-center flex-wrap gap-2">
-                <div className="h-5 w-32 bg-gray-700 rounded" />
-                <div className="h-4 w-20 bg-gray-700 rounded" />
+                <div className="h-5 w-32 bg-blue-800 rounded" />
+                <div className="h-4 w-20 bg-blue-800 rounded" />
               </div>
               {/* Stats skeleton */}
-              <div className="mt-1 h-3 w-48 bg-gray-700 rounded" />
+              <div className="mt-1 h-3 w-48 bg-blue-800 rounded" />
             </div>
             
             {/* Price and holders skeleton */}
             <div className="text-right">
-              <div className="h-5 w-20 bg-gray-700 rounded mb-1" />
-              <div className="h-3 w-16 bg-gray-700 rounded" />
+              <div className="h-5 w-20 bg-blue-800 rounded mb-1" />
+              <div className="h-3 w-16 bg-blue-800 rounded" />
             </div>
           </div>
         </div>
@@ -723,24 +733,13 @@ const TokenCard = ({ token }: { token: Token }) => {
       try {
         setLoading(true);
         
-        // Immediately return RUGGED status if holder_count is 0
-        if (token.holder_count === 0) {
-          setRisk({
-            level: "RUGGED",
-            color: "text-red-600",
-            message: "Token appears to be abandoned",
-            warning: "No holders found - Token likely rugged"
-          });
-          setLoading(false);
-          return;
-        }
-        
-        // Only fetch holders if there are holders
+        // Fetch holders data
         const holdersData = await fetchTokenHolders(token.id, token.creator);
-        const holdersArray = holdersData[token.id]?.data || [];
+        // Extract holders array from the response structure
+        const holdersArray = holdersData[token.id]?.holders || [];
         setHolders(holdersArray);
 
-        // Process risk assessment
+        // Process risk assessment with the correct holder data
         const riskAssessment = await processHolderData(holdersArray, token);
         setRisk(riskAssessment);
       } catch (error) {
@@ -761,16 +760,16 @@ const TokenCard = ({ token }: { token: Token }) => {
 
   if (loading) {
     return (
-      <div className="p-3 sm:p-4 bg-card hover:bg-card/80 rounded-lg border border-border animate-pulse">
+      <div className="p-3 sm:p-4 bg-blue-900 hover:bg-blue-800 rounded-lg border border-blue-800 animate-pulse">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-lg bg-gray-700" />
+          <div className="w-12 h-12 rounded-lg bg-blue-800" />
           <div className="flex-1">
-            <div className="h-5 w-32 bg-gray-700 rounded mb-2" />
-            <div className="h-4 w-48 bg-gray-700 rounded" />
+            <div className="h-5 w-32 bg-blue-800 rounded mb-2" />
+            <div className="h-4 w-48 bg-blue-800 rounded" />
           </div>
           <div className="text-right">
-            <div className="h-5 w-20 bg-gray-700 rounded mb-1" />
-            <div className="h-4 w-16 bg-gray-700 rounded" />
+            <div className="h-5 w-20 bg-blue-800 rounded mb-1" />
+            <div className="h-4 w-16 bg-blue-800 rounded" />
           </div>
         </div>
       </div>
@@ -778,7 +777,7 @@ const TokenCard = ({ token }: { token: Token }) => {
   }
 
   return (
-    <div className="block p-3 sm:p-4 bg-card hover:bg-card/80 rounded-lg border border-border">
+    <div className="block p-3 sm:p-4 bg-blue-900 hover:bg-blue-800 rounded-lg border border-blue-800">
       <div className="flex items-center gap-3">
         <Link
           key={token.id}
@@ -799,7 +798,7 @@ const TokenCard = ({ token }: { token: Token }) => {
                 {risk?.level}
               </span>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-xs text-blue-300 mt-1">
               {risk?.warning}
             </p>
           </div>
@@ -809,7 +808,7 @@ const TokenCard = ({ token }: { token: Token }) => {
           <p className="font-medium">
             {formatPrice(token.price || 0)}
           </p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-blue-300">
             {token.holder_count} holders
           </p>
           <div className="flex items-center gap-2 justify-end mt-1">
@@ -818,7 +817,7 @@ const TokenCard = ({ token }: { token: Token }) => {
                 href={token.website}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-muted-foreground hover:text-primary"
+                className="text-blue-400 hover:text-blue-200"
               >
                 <Globe className="h-3 w-3" />
               </a>
@@ -828,7 +827,7 @@ const TokenCard = ({ token }: { token: Token }) => {
                 href={token.twitter}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-muted-foreground hover:text-primary"
+                className="text-blue-400 hover:text-blue-200"
               >
                 <svg 
                   width="12" 
@@ -836,7 +835,7 @@ const TokenCard = ({ token }: { token: Token }) => {
                   viewBox="0 0 1200 1227" 
                   fill="none" 
                   xmlns="http://www.w3.org/2000/svg"
-                  className="transition-colors hover:text-primary"
+                  className="transition-colors hover:text-blue-200"
                 >
                   <path 
                     d="M714.163 519.284L1160.89 0H1055.03L667.137 450.887L357.328 0H0L468.492 681.821L0 1226.37H105.866L515.491 750.218L842.672 1226.37H1200L714.137 519.284H714.163ZM569.165 687.828L521.697 619.934L144.011 79.6944H306.615L611.412 515.685L658.88 583.579L1055.08 1150.3H892.476L569.165 687.854V687.828Z" 
@@ -850,7 +849,7 @@ const TokenCard = ({ token }: { token: Token }) => {
                 href={token.telegram}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-muted-foreground hover:text-primary"
+                className="text-blue-400 hover:text-blue-200"
               >
                 <Send className="h-3 w-3" />
               </a>
@@ -924,7 +923,7 @@ export default function TokensPage() {
         return 'extreme';
       }
 
-      const holders = holdersMap[token.id]?.data || [];
+      const holders = holdersMap[token.id]?.holders || [];
       
       // Check if dev has sold entire position
       const devHolder = holders.find(h => h.user === token.creator);
@@ -932,12 +931,12 @@ export default function TokensPage() {
         return 'extreme';
       }
 
-      const devHoldings = Number(devHolder.balance) / 1e11;
-      const totalSupplyNum = Number(token.total_supply) / 1e11;
+      const devHoldings = Number(devHolder.balance);
+      const totalSupplyNum = Number(token.total_supply);
       const devPercentage = (devHoldings / totalSupplyNum) * 100;
 
       const sortedHolders = [...holders].sort((a, b) => Number(b.balance) - Number(a.balance));
-      const top5Holdings = sortedHolders.slice(0, 5).reduce((sum, h) => sum + Number(h.balance) / 1e11, 0);
+      const top5Holdings = sortedHolders.slice(0, 5).reduce((sum, h) => sum + Number(h.balance), 0);
       const top5Percentage = (top5Holdings / totalSupplyNum) * 100;
 
       // Strict risk level checks from lowest to highest
@@ -1085,101 +1084,87 @@ export default function TokensPage() {
   }, [tokens, filterAndSortTokens]);
 
   return (
-    <div className="container px-2 sm:px-4 py-4 sm:py-8">
-      <div className="max-w-6xl mx-auto space-y-4 sm:space-y-8">
-        {/* Header section */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <h1 className="text-xl sm:text-2xl font-semibold">Recent Tokens</h1>
-          <div className="flex flex-wrap gap-2">
-            <Button asChild className="flex-1 sm:flex-none">
-              <Link href="/" className="bg-primary hover:bg-primary/90">
-                Analyze Token
-              </Link>
-            </Button>
+    <div className="min-h-screen w-full bg-blue-950">
+      <div className="container px-2 sm:px-4 py-4 sm:py-8">
+        <div className="max-w-6xl mx-auto space-y-4 sm:space-y-8">
+          {/* Header section */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <h1 className="text-xl sm:text-2xl font-semibold">Recent Tokens</h1>
+            <div className="flex flex-wrap gap-2">
+              <Button asChild className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white">
+                <Link href="/">
+                  Analyze Token
+                </Link>
+              </Button>
 
-            {/* Risk Filter Dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="gap-2 flex-1 sm:flex-none">
-                  <Filter className="h-4 w-4" />
-                  {riskFilter === 'all' ? 'All Risks' : `${riskFilter.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')} Risk`}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem onClick={() => setRiskFilter('all')}>All Risks</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setRiskFilter('low')}>Low Risk</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setRiskFilter('guarded')}>Guarded Risk</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setRiskFilter('elevated')}>Elevated Risk</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setRiskFilter('moderate')}>Moderate Risk</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setRiskFilter('high')}>High Risk</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setRiskFilter('very_high')}>Very High Risk</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setRiskFilter('extreme')}>Extreme Risk</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+              {/* Risk Filter Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="gap-2 flex-1 sm:flex-none border-blue-800 text-blue-300">
+                    <Filter className="h-4 w-4" />
+                    {riskFilter === 'all' ? 'All Risks' : `${riskFilter.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')} Risk`}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="bg-blue-900 border border-blue-800">
+                  <DropdownMenuItem onClick={() => setRiskFilter('all')} className="hover:bg-blue-800 focus:bg-blue-800">All Risks</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setRiskFilter('low')} className="hover:bg-blue-800 focus:bg-blue-800">Low Risk</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setRiskFilter('guarded')} className="hover:bg-blue-800 focus:bg-blue-800">Guarded Risk</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setRiskFilter('elevated')} className="hover:bg-blue-800 focus:bg-blue-800">Elevated Risk</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setRiskFilter('moderate')} className="hover:bg-blue-800 focus:bg-blue-800">Moderate Risk</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setRiskFilter('high')} className="hover:bg-blue-800 focus:bg-blue-800">High Risk</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setRiskFilter('very_high')} className="hover:bg-blue-800 focus:bg-blue-800">Very High Risk</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setRiskFilter('extreme')} className="hover:bg-blue-800 focus:bg-blue-800">Extreme Risk</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
-            {/* Sort Dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="gap-2 flex-1 sm:flex-none">
-                  <ArrowUpDown className="h-4 w-4" />
-                  Sort
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem onClick={() => setSortBy('newest')}>Newest First</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSortBy('oldest')}>Oldest First</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSortBy('price_high')}>Highest Price</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSortBy('price_low')}>Lowest Price</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSortBy('holders_high')}>Most Holders</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSortBy('holders_low')}>Least Holders</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSortBy('risk_high')}>Highest Risk</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSortBy('risk_low')}>Lowest Risk</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-
-        {/* Search bar */}
-        <div className="flex gap-2">
-          <Input
-            placeholder="Search tokens..."
-            className="flex-1"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          <Button>
-            <Search className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {/* Token list */}
-        <div className="space-y-3 sm:space-y-4">
-          {loading ? (
-            <TokenListSkeleton />
-          ) : error ? (
-            <div className="text-center py-8 text-red-500">{error}</div>
-          ) : filteredTokens.length > 0 ? (
-            filteredTokens.map(token => (
-              <TokenCard key={token.id} token={token} />
-            ))
-          ) : (
-            <div className="text-center py-8">No tokens found</div>
-          )}
-        </div>
-      </div>
-
-      {/* Donation message */}
-      <div className="fixed bottom-4 right-4 z-10">
-        <div className="bg-card/80 backdrop-blur-sm border border-border rounded-lg p-3 shadow-lg w-[360px]">
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">
-              Support ODINSMASH ❤️ - Help keep our tools running
-            </p>
-            <div className="flex items-center gap-2">
-              <code className="text-xs text-primary font-mono">
-                bc1q3p7dpmu0s3mmcfj83jf072gjdcf6sqcdf3uk52
-              </code>
+              {/* Sort Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="gap-2 flex-1 sm:flex-none border-blue-800 text-blue-300">
+                    <ArrowUpDown className="h-4 w-4" />
+                    Sort
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="bg-blue-900 border border-blue-800">
+                  <DropdownMenuItem onClick={() => setSortBy('newest')} className="hover:bg-blue-800 focus:bg-blue-800">Newest First</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setSortBy('oldest')} className="hover:bg-blue-800 focus:bg-blue-800">Oldest First</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setSortBy('price_high')} className="hover:bg-blue-800 focus:bg-blue-800">Highest Price</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setSortBy('price_low')} className="hover:bg-blue-800 focus:bg-blue-800">Lowest Price</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setSortBy('holders_high')} className="hover:bg-blue-800 focus:bg-blue-800">Most Holders</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setSortBy('holders_low')} className="hover:bg-blue-800 focus:bg-blue-800">Least Holders</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setSortBy('risk_high')} className="hover:bg-blue-800 focus:bg-blue-800">Highest Risk</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setSortBy('risk_low')} className="hover:bg-blue-800 focus:bg-blue-800">Lowest Risk</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
+          </div>
+
+          {/* Search bar */}
+          <div className="flex gap-2">
+            <Input
+              placeholder="Search tokens..."
+              className="flex-1 bg-black border-blue-600 focus:border-blue-400 text-white"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+              <Search className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {/* Token list */}
+          <div className="space-y-3 sm:space-y-4">
+            {loading ? (
+              <TokenListSkeleton />
+            ) : error ? (
+              <div className="text-center py-8 text-red-500">{error}</div>
+            ) : filteredTokens.length > 0 ? (
+              filteredTokens.map(token => (
+                <TokenCard key={token.id} token={token} />
+              ))
+            ) : (
+              <div className="text-center py-8">No tokens found</div>
+            )}
           </div>
         </div>
       </div>

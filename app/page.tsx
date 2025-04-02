@@ -1,11 +1,12 @@
+'use client';
+
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Search, Filter, ArrowUpDown } from "lucide-react"
-import { AnalysisHistory } from "@/components/AnalysisHistory"
-import { useState } from 'react';
 import Image from "next/image"
-import AdContainer from "@/components/ad-container"
+import { Button } from "../components/ui/button"
+import { Input } from "../components/ui/input"
+import { Search, Filter, ArrowUpDown, Menu } from "lucide-react"
+import { AnalysisHistory } from "@/components/AnalysisHistory"
+import { useState, useEffect, useRef } from 'react';
 
 interface TokenData {
   id: string
@@ -16,6 +17,10 @@ interface TokenData {
   holder_count: number
   volume: number
   price_1h: number
+  btc_liquidity: number
+  token_liquidity: number
+  total_supply: string
+  creator_balance?: string
 }
 
 async function getRecentTokens(): Promise<TokenData[]> {
@@ -146,48 +151,102 @@ const calculateRiskLevel = (token: TokenData): RiskLevel => {
   };
 };
 
-export default async function Home() {
-  const recentTokens = await getRecentTokens()
+export default function Home() {
+  const [tokens, setTokens] = useState<any[]>([]);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const fetchTokens = async () => {
+      try {
+        const response = await fetch("/tokens.json");
+        const data = await response.json();
+        setTokens(data);
+      } catch (error) {
+        console.error("Error fetching tokens:", error);
+      }
+    };
+
+    fetchTokens();
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+
+    if (isMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    } else {
+      document.removeEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isMenuOpen]);
 
   return (
-    <div className="min-h-screen font-mono flex flex-col items-center" style={{ backgroundColor: '#000000' }}>
-      <header className="border-b border-border w-full relative" style={{ backgroundColor: '#000000' }}>
-        <div className="container flex h-14 items-center justify-between px-2 sm:px-4">
-          <div className="flex items-center gap-2 sm:gap-6">
-            <Link href="/" className="flex items-center gap-2 text-base sm:text-lg font-semibold">
+    <div className="min-h-screen flex flex-col items-center bg-blue-950 overflow-hidden">
+      <header className="border-b border-blue-800 w-full relative bg-blue-900">
+        <div className="container flex items-center justify-between h-14 px-4">
+          <div className="flex items-center gap-2">
+            <Link href="/" className="flex items-center gap-2 text-lg font-semibold">
               <Image 
-                src="/Logo.png"
-                alt="Odinsmash Logo"
-                width={24}
-                height={24}
-                className="w-6 h-6"
+                src="https://i.postimg.cc/7hkYw7PM/image-removebg-preview.png"
+                alt="Token Detective Logo"
+                width={48}
+                height={48}
+                className="w-12 h-12"
               />
-              ODINSMASH
+              Token Detective
             </Link>
-            <nav className="flex items-center space-x-2 sm:space-x-4 text-xs sm:text-sm">
-              <Link href="/" className="text-primary hover:text-primary/80">
-                HOME
-              </Link>
-              <Link href="/tokens" className="text-muted-foreground hover:text-foreground">
-                TOKENS
-              </Link>
-              <Link href="/extension" className="text-muted-foreground hover:text-foreground">
-                EXTENSION
-              </Link>
-              <Link href="/docs" className="text-muted-foreground hover:text-foreground">
-                DOCS
-              </Link>
+          </div>
+        
+          <div className="md:hidden">
+            <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="text-white">
+              <Menu className="h-6 w-6" />
+            </button>
+          </div>
+          <nav className={`hidden md:flex items-center space-x-4 text-sm`}>
+            <Link href="/" className="text-blue-300 hover:text-blue-100">HOME</Link>
+            <Link href="/tokens" className="text-blue-400/80 hover:text-blue-200">TOKENS</Link>
+            <div className="relative">
+              <span className="text-blue-400/50 cursor-not-allowed">WHALE ACTIVITY</span>
+              <div className="absolute -top-3 -right-8 bg-blue-600 px-1.5 py-0.5 rounded-full text-[10px] font-medium">
+                Soon
+              </div>
+            </div>
+          </nav>
+          <button disabled className="bg-blue-600/50 text-blue-200/70 px-3 py-1 rounded-md text-sm font-semibold cursor-not-allowed hidden md:block">
+            Buy Token Detective
+          </button>
+        </div>
+        {/* Mobile Navigation */}
+        {isMenuOpen && (
+          <div className={`fixed inset-0 bg-blue-950 bg-opacity-75 transition-opacity z-50 ${isMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+            <nav ref={menuRef} className="fixed right-0 top-0 w-64 h-full bg-blue-900 p-4 flex flex-col justify-between transform transition-transform duration-300 ease-in-out shadow-xl z-60" style={{ transform: isMenuOpen ? 'translateX(0)' : 'translateX(100%)' }}>
+              <div>
+                <Link href="/" className="block text-blue-300 hover:text-blue-100 mb-2">HOME</Link>
+                <Link href="/tokens" className="block text-blue-400/80 hover:text-blue-200 mb-2">TOKENS</Link>
+                <div className="relative inline-block text-blue-400/50 cursor-not-allowed mb-2">
+                  WHALE ACTIVITY
+                  <div className="absolute -top-3 -right-8 bg-blue-600 px-1.5 py-0.5 rounded-full text-[10px] font-medium">
+                    Soon
+                  </div>
+                </div>
+              </div>
+              <button disabled className="bg-blue-600/50 text-blue-200/70 px-3 py-1 rounded-md text-sm font-semibold cursor-not-allowed mb-4 w-full text-center">
+                Buy Token Detective
+              </button>
             </nav>
           </div>
-          <Link 
-            href="https://odin.fun/token/2ait"
-            className="bg-yellow-500 text-black px-3 py-1 rounded-md animate-pulse hover:bg-yellow-600 text-xs sm:text-sm font-semibold"
-          >
-            Buy ODINSMASH
-          </Link>
-        </div>
+        )}
       </header>
-      <main className="container px-2 sm:px-4 py-4 sm:py-8 flex-1 flex flex-col items-center" style={{ backgroundColor: '#000000' }}>
+
+      <main className="container px-4 py-8 flex-1 flex flex-col items-center max-w-full w-full">
         <div className="max-w-[489px] w-full space-y-4 sm:space-y-8">
           <div className="space-y-1 sm:space-y-2 text-center">
             <h1 className="text-xl sm:text-2xl font-semibold">Token Analysis</h1>
@@ -195,7 +254,7 @@ export default async function Home() {
               Enter an Odin.fun token URL to analyze its risk profile
             </p>
           </div>
-          <div className="terminal-card p-3 sm:p-6 space-y-4 sm:space-y-6 backdrop-blur-sm bg-card/80 w-full">
+          <div className="bg-black p-4 rounded-md border border-blue-800 w-full">
             <form 
               action="/results" 
               method="get"
@@ -204,20 +263,16 @@ export default async function Home() {
               <div className="flex gap-2">
                 <Input
                   name="search"
-                  placeholder="Enter token URL or ID (e.g. 2ait)"
-                  className="flex-1 bg-secondary border-border font-mono text-sm sm:text-base"
+                  placeholder="Enter token URL or ID (e.g. 2jjj)"
+                  className="flex-1 bg-black border-blue-600 focus:border-blue-400 font-mono text-sm sm:text-base text-white"
                   required
                 />
-                <Button type="submit" className="bg-primary hover:bg-primary/90 text-white">
+                <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white">
                   <Search className="h-4 w-4" />
                 </Button>
               </div>
             </form>
           </div>
-        </div>
-
-        <div className="mt-32 w-full max-w-[489px] flex justify-center">
-          <AdContainer />
         </div>
       </main>
     </div>

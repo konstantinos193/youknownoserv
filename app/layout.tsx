@@ -2,75 +2,79 @@ import "./globals.css"
 import { Inter } from "next/font/google"
 import type React from "react"
 import Head from 'next/head'
-import Background from "@/components/background"
-
+import Background from "../components/background"
+import { Button } from "../components/ui/button"
+import type { Metadata } from "next"
+import Providers from "./providers"
 
 const inter = Inter({ subsets: ["latin"] })
 
-export const metadata = {
-  title: "Odinsmash",
-  description: "Token Risk Analysis Tool",
+export const metadata: Metadata = {
+  title: "Token Detective",
+  description: "Whale & Dev Activity Dashboard",
   icons: {
-    icon: '/favicon.ico',
-    shortcut: '/favicon.ico',
-    apple: '/favicon.ico',
+    icon: 'https://i.postimg.cc/7hkYw7PM/image-removebg-preview.png',
+    shortcut: 'https://i.postimg.cc/7hkYw7PM/image-removebg-preview.png',
+    apple: 'https://i.postimg.cc/7hkYw7PM/image-removebg-preview.png',
   },
   openGraph: {
     type: 'website',
-    url: 'https://odinsmash.com',
-    title: 'Odinsmash',
+    url: 'https://tokendetective.fun',
+    title: 'Token Detective',
     description: 'Token Risk Analysis Tool',
-    siteName: 'Odinsmash',
+    siteName: 'Token Detective',
     images: [
       {
-        url: 'https://i.postimg.cc/zBqJ9HdB/ODINSMASH.png',
+        url: 'https://i.postimg.cc/7hkYw7PM/image-removebg-preview.png',
         width: 1200,
         height: 630,
-        alt: 'Odinsmash Token Analyzer',
+        alt: 'Token Detective Token Analyzer',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Odinsmash',
+    title: 'Token Detective',
     description: 'Token Risk Analysis Tool',
-    images: ['https://i.postimg.cc/zBqJ9HdB/ODINSMASH.png'],
+    images: ['https://i.postimg.cc/7hkYw7PM/image-removebg-preview.png'],
   },
 }
 
 export default function RootLayout({
   children,
-}: {
-  children: React.ReactNode
-}) {
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   console.log("LAYOUT RENDERING")
   
   return (
     <>
       <Head>
-        <link rel="icon" href="/favicon.ico" type="image/x-icon" />
-        <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
-        <link rel="apple-touch-icon" href="/favicon.ico" />
+        <link rel="icon" href="https://i.postimg.cc/7hkYw7PM/image-removebg-preview.png" type="image/x-icon" />
+        <link rel="shortcut icon" href="https://i.postimg.cc/7hkYw7PM/image-removebg-preview.png" type="image/x-icon" />
+        <link rel="apple-touch-icon" href="https://i.postimg.cc/7hkYw7PM/image-removebg-preview.png" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <link rel="canonical" href="https://odinsmash.com" />
+        <link rel="canonical" href="https://tokendetective.fun" />
         <meta name="robots" content="index, follow" />
         <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://odinsmash.com" />
-        <meta property="og:title" content="Odinsmash" />
+        <meta property="og:url" content="https://tokendetective.fun" />
+        <meta property="og:title" content="Token Detective" />
         <meta property="og:description" content="Token Risk Analysis Tool" />
-        <meta property="og:image" content="https://i.postimg.cc/zBqJ9HdB/ODINSMASH.png" />
-        <meta property="og:site_name" content="Odinsmash" />
+        <meta property="og:image" content="https://i.postimg.cc/7hkYw7PM/image-removebg-preview.png" />
+        <meta property="og:site_name" content="Token Detective" />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="Odinsmash" />
+        <meta name="twitter:title" content="Token Detective" />
         <meta name="twitter:description" content="Token Risk Analysis Tool" />
-        <meta name="twitter:image" content="https://i.postimg.cc/zBqJ9HdB/ODINSMASH.png" />
+        <meta name="twitter:image" content="https://i.postimg.cc/7hkYw7PM/image-removebg-preview.png" />
       </Head>
       <html lang="en">
         <body style={{ backgroundColor: '#000000' }}>
-          <Background />
-          <div style={{ backgroundColor: '#000000' }}>
-            {children}
-          </div>
+          <Providers>
+            <Background />
+            <div style={{ backgroundColor: '#000000' }}>
+              {children}
+            </div>
+          </Providers>
         </body>
       </html>
     </>
