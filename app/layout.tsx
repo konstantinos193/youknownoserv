@@ -13,9 +13,9 @@ export const metadata: Metadata = {
   title: "Token Detective",
   description: "Whale & Dev Activity Dashboard",
   icons: {
-    icon: 'https://i.postimg.cc/7hkYw7PM/image-removebg-preview.png',
-    shortcut: 'https://i.postimg.cc/7hkYw7PM/image-removebg-preview.png',
-    apple: 'https://i.postimg.cc/7hkYw7PM/image-removebg-preview.png',
+    icon: 'https://i.postimg.cc/s2dq2RZy/image-removebg-preview-1.png',
+    shortcut: 'https://i.postimg.cc/s2dq2RZy/image-removebg-preview-1.png',
+    apple: 'https://i.postimg.cc/s2dq2RZy/image-removebg-preview-1.png',
   },
   openGraph: {
     type: 'website',
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     siteName: 'Token Detective',
     images: [
       {
-        url: 'https://i.postimg.cc/7hkYw7PM/image-removebg-preview.png',
+        url: 'https://i.postimg.cc/s2dq2RZy/image-removebg-preview-1.png',
         width: 1200,
         height: 630,
         alt: 'Token Detective Token Analyzer',
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Token Detective',
     description: 'Token Risk Analysis Tool',
-    images: ['https://i.postimg.cc/7hkYw7PM/image-removebg-preview.png'],
+    images: ['https://i.postimg.cc/s2dq2RZy/image-removebg-preview-1.png'],
   },
 }
 
@@ -50,9 +50,9 @@ export default function RootLayout({
   return (
     <>
       <Head>
-        <link rel="icon" href="https://i.postimg.cc/7hkYw7PM/image-removebg-preview.png" type="image/x-icon" />
-        <link rel="shortcut icon" href="https://i.postimg.cc/7hkYw7PM/image-removebg-preview.png" type="image/x-icon" />
-        <link rel="apple-touch-icon" href="https://i.postimg.cc/7hkYw7PM/image-removebg-preview.png" />
+        <link rel="icon" href="https://i.postimg.cc/s2dq2RZy/image-removebg-preview-1.png" type="image/x-icon" />
+        <link rel="shortcut icon" href="https://i.postimg.cc/s2dq2RZy/image-removebg-preview-1.png" type="image/x-icon" />
+        <link rel="apple-touch-icon" href="https://i.postimg.cc/s2dq2RZy/image-removebg-preview-1.png" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link rel="canonical" href="https://tokendetective.fun" />
         <meta name="robots" content="index, follow" />
@@ -60,12 +60,12 @@ export default function RootLayout({
         <meta property="og:url" content="https://tokendetective.fun" />
         <meta property="og:title" content="Token Detective" />
         <meta property="og:description" content="Token Risk Analysis Tool" />
-        <meta property="og:image" content="https://i.postimg.cc/7hkYw7PM/image-removebg-preview.png" />
+        <meta property="og:image" content="https://i.postimg.cc/s2dq2RZy/image-removebg-preview-1.png" />
         <meta property="og:site_name" content="Token Detective" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="Token Detective" />
         <meta name="twitter:description" content="Token Risk Analysis Tool" />
-        <meta name="twitter:image" content="https://i.postimg.cc/7hkYw7PM/image-removebg-preview.png" />
+        <meta name="twitter:image" content="https://i.postimg.cc/s2dq2RZy/image-removebg-preview-1.png" />
       </Head>
       <html lang="en">
         <body style={{ backgroundColor: '#000000' }}>
