@@ -195,7 +195,7 @@ export default function Home() {
           <div className="flex items-center gap-2">
             <Link href="/" className="flex items-center gap-2 text-lg font-semibold">
               <Image 
-                src="https://i.postimg.cc/7hkYw7PM/image-removebg-preview.png"
+                src="https://i.postimg.cc/s2dq2RZy/image-removebg-preview-1.png"
                 alt="Token Detective Logo"
                 width={48}
                 height={48}
