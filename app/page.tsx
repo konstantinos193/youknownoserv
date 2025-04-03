@@ -220,9 +220,13 @@ export default function Home() {
               </div>
             </div>
           </nav>
-          <button disabled className="bg-blue-600/50 text-blue-200/70 px-3 py-1 rounded-md text-sm font-semibold cursor-not-allowed hidden md:block">
-            Buy Token Detective
-          </button>
+          <button 
+  onClick={() => window.location.href = "https://odin.fun/token/2e7t"}
+  className="bg-blue-600 text-white px-3 py-1 rounded-md text-sm font-semibold hover:bg-blue-700"
+>
+  Buy Token Detective
+</button>
+
         </div>
         {/* Mobile Navigation */}
         {isMenuOpen && (
