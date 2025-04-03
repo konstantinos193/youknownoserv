@@ -767,12 +767,6 @@ const Header = () => (
           </div>
         </nav>
       </div>
-      <button 
-  onClick={() => window.location.href = "https://odin.fun/token/2e7t"}
-  className="bg-blue-600 text-white px-3 py-1 rounded-md text-sm font-semibold hover:bg-blue-700"
->
-  Buy Token Detective
-</button>
     </div>
   </header>
 );
