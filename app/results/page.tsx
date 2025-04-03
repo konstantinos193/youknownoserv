@@ -768,11 +768,11 @@ const Header = () => (
         </nav>
       </div>
       <button 
-        disabled
-        className="bg-blue-600/50 text-blue-200/70 px-3 py-2 rounded-md text-xs sm:text-sm font-semibold cursor-not-allowed absolute right-4 top-1/2 transform -translate-y-1/2"
-      >
-        Buy Token Detective
-      </button>
+  onClick={() => window.location.href = "https://odin.fun/token/2e7t"}
+  className="bg-blue-600 text-white px-3 py-1 rounded-md text-sm font-semibold hover:bg-blue-700"
+>
+  Buy Token Detective
+</button>
     </div>
   </header>
 );
