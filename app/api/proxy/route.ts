@@ -19,12 +19,27 @@ export async function GET(request: NextRequest) {
       }
     });
 
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`API error (${response.status}):`, errorText);
+      return NextResponse.json(
+        { error: `API request failed: ${response.status}`, details: errorText },
+        { status: response.status }
+      );
+    }
+
     const data = await response.json();
+    
+    // If the response indicates an error, maintain the error structure
+    if (data && data.error) {
+      return NextResponse.json(data, { status: 400 });
+    }
+
     return NextResponse.json(data);
   } catch (error) {
     console.error('Proxy error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch data' },
+      { error: 'Failed to fetch data', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

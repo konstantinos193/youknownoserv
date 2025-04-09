@@ -584,19 +584,13 @@ export default function ResultsPage() {
 
         setLoading(true);
         console.log('🔍 Starting data fetch for token:', search);
-
-        const headers = {
-          'Accept': 'application/json',
-          'Origin': 'https://odinscan.fun',
-          'Referer': 'https://odinscan.fun/'
-        };
         
         // Use the direct API endpoints with proper headers
         const [tokenResponse, holdersResponse, btcPriceResponse, holderGrowthResponse] = await Promise.all([
-          fetch(`${API_ENDPOINTS.token(search)}`, { headers }),
-          fetch(`${API_ENDPOINTS.tokenOwners(search)}`, { headers }),
-          fetch(API_ENDPOINTS.btcPrice, { headers }),
-          fetch(`${API_ENDPOINTS.tokenMetrics(search)}`, { headers })
+          fetch(`${API_ENDPOINTS.token(search)}`),
+          fetch(`${API_ENDPOINTS.tokenOwners(search)}`),
+          fetch(API_ENDPOINTS.btcPrice),
+          fetch(`${API_ENDPOINTS.tokenMetrics(search)}`)
         ]);
 
         if (!tokenResponse.ok) {
@@ -639,11 +633,28 @@ export default function ResultsPage() {
           setVolumeMetrics(tokenData.volumeMetrics);
         }
 
-        if (holderGrowthData) {
+        // Handle holder growth metrics with proper error checking
+        if (holderGrowthData && !holderGrowthData.error) {
           console.log('✅ Setting holder growth metrics:', holderGrowthData);
           setHolderAnalysis(holderGrowthData);
         } else {
-          console.warn('⚠️ No holder growth data available');
+          console.warn('⚠️ No holder growth data available:', holderGrowthData?.error || 'Unknown error');
+          // Set default holder growth metrics
+          setHolderAnalysis({
+            dailyGrowth: {
+              current: tokenData.holder_count || 0,
+              previous: tokenData.holder_count || 0,
+              growthRate: 0,
+              newHolders: 0
+            },
+            weeklyGrowth: {
+              current: tokenData.holder_count || 0,
+              previous: tokenData.holder_count || 0,
+              growthRate: 0,
+              newHolders: 0
+            },
+            retentionRate: 100
+          });
         }
 
         setLoading(false);
