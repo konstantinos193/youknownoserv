@@ -18,11 +18,8 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   metadataBase: new URL(baseUrl),
-  title: {
-    default: "ODINSCAN - Odin.fun Token Analysis Tool",
-    template: "%s | ODINSCAN",
-  },
-  description: "Analyze Odin.fun tokens for risk assessment, detailed metrics, and market insights.",
+  title: "ODINSCAN - Token Analysis Tool",
+  description: "Analyze tokens on Odin.fun with advanced risk assessment and holder analysis",
   keywords: ["odin", "token", "cryptocurrency", "analysis", "risk assessment", "blockchain", "crypto"],
   authors: [{ name: "ODINSCAN Team" }],
   creator: "ODINSCAN",
@@ -40,8 +37,8 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_US",
     url: baseUrl,
-    title: "ODINSCAN - Odin.fun Token Analysis Tool",
-    description: "Analyze Odin.fun tokens for risk assessment, detailed metrics, and market insights.",
+    title: "ODINSCAN - Token Analysis Tool",
+    description: "Analyze tokens on Odin.fun with advanced risk assessment and holder analysis",
     siteName: "ODINSCAN",
     images: [
       {
@@ -56,8 +53,8 @@ export const metadata: Metadata = {
   // Twitter metadata
   twitter: {
     card: "summary_large_image",
-    title: "ODINSCAN - Odin.fun Token Analysis Tool",
-    description: "Analyze Odin.fun tokens for risk assessment, detailed metrics, and market insights.",
+    title: "ODINSCAN - Token Analysis Tool",
+    description: "Analyze tokens on Odin.fun with advanced risk assessment and holder analysis",
     creator: "@odinscan",
     images: [`${baseUrl}/twitter-image.png`],
   },

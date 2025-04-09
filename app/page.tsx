@@ -40,7 +40,7 @@ export default function Home() {
         setIsLoading(true)
         const [tokensResponse, trendingResponse, btcPriceResponse] = await Promise.all([
           fetch(API_ENDPOINTS.allTokens),
-          fetch(API_ENDPOINTS.trendingTokens),
+          fetch(API_ENDPOINTS.trending),
           fetch(API_ENDPOINTS.btcPrice)
         ]);
 

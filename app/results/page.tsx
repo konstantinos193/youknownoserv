@@ -365,17 +365,16 @@ const fetchCreatorUsername = async (creatorId: string): Promise<string> => {
 
 // Components
 const TokenImage = ({ tokenId, name }: { tokenId: string; name: string }) => {
-  const [imgError, setImgError] = useState(false)
-  const imageUrl = `https://images.odin.fun/token/${tokenId}`
-  const placeholderUrl = "/placeholder.svg?height=110&width=110"
-
   return (
-    <img
-      src={imgError ? placeholderUrl : imageUrl}
-      alt={name || "Token"}
-      onError={() => setImgError(true)}
-      className="object-cover h-[60px] w-[60px] rounded-lg lg:h-[110px] lg:w-[110px]"
-    />
+    <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-gray-800">
+      <Image
+        src={`https://images.odin.fun/token/${tokenId}`}
+        alt={name}
+        fill
+        className="object-cover"
+        unoptimized
+      />
+    </div>
   )
 }
 
@@ -555,8 +554,7 @@ const AsyncRiskAnalysis = ({
 
 export default function ResultsPage() {
   const searchParams = useSearchParams()
-  const searchUrl = searchParams.get("search")
-  const tokenId = searchUrl ? searchUrl.split("/").pop() || "" : ""
+  const search = searchParams.get('search') || ''
 
   const [tokenData, setTokenData] = useState<Token | null>(null)
   const [loading, setLoading] = useState(true)
@@ -578,21 +576,21 @@ export default function ResultsPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        if (!tokenId) {
+        if (!search) {
           setError("No token ID provided");
           setLoading(false);
           return;
         }
 
         setLoading(true);
-        console.log('🔍 Starting data fetch for token:', tokenId);
+        console.log('🔍 Starting data fetch for token:', search);
         
         // Fetch all required data in parallel
         const [tokenResponse, holdersResponse, btcPriceResponse, holderGrowthResponse] = await Promise.all([
-          fetch(API_ENDPOINTS.token(tokenId)),
-          fetch(`/api/token/${tokenId}/holders-pnl`),  // Use the new endpoint
+          fetch(API_ENDPOINTS.token(search)),
+          fetch(`/api/token/${search}/holders-pnl`),  // Use the new endpoint
           fetch('/api/btc-price'),
-          fetch(`/api/token-metrics/${tokenId}/holder-growth`)
+          fetch(`/api/token-metrics/${search}/holder-growth`)
         ]);
 
         if (!tokenResponse.ok) {
@@ -655,7 +653,7 @@ export default function ResultsPage() {
     };
 
     fetchData();
-  }, [tokenId]);
+  }, [search]);
 
   const fetchTrades = async () => {
     try {
@@ -666,7 +664,7 @@ export default function ResultsPage() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
       
-      const response = await fetch(API_ENDPOINTS.tokenTrades(tokenId), {
+      const response = await fetch(API_ENDPOINTS.tokenTrades(search), {
         signal: controller.signal
       });
       
@@ -691,10 +689,10 @@ export default function ResultsPage() {
   };
 
   useEffect(() => {
-    if (tokenId) {
+    if (search) {
       fetchTrades();
     }
-  }, [tokenId]);
+  }, [search]);
 
   // Add this to the component, after the useEffect hooks
   const handleShare = () => {
@@ -857,7 +855,7 @@ export default function ResultsPage() {
         <div className="bg-gray-900/50 border border-cyan-600/20 rounded-lg p-6 mb-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
             <div className="flex items-start gap-4">
-              <TokenImage tokenId={tokenId} name={tokenData.name} />
+              <TokenImage tokenId={search} name={tokenData.name} />
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-xl font-bold text-yellow-300">{tokenData.name}</h1>
@@ -886,7 +884,7 @@ export default function ResultsPage() {
               </div>
               <div className="text-sm text-cyan-400">Market Cap: {formatMarketCap(tokenData.price, tokenData.total_supply, btcUsdPrice)}</div>
               <Button asChild className="bg-cyan-500 hover:bg-cyan-600 text-black font-medium mt-2">
-                <Link href={`https://odin.fun/token/${tokenData.id}`} target="_blank" rel="noopener noreferrer">
+                <Link href={`https://odin.fun/token/${search}`} target="_blank" rel="noopener noreferrer">
                   Trade on Odin.fun
                 </Link>
               </Button>

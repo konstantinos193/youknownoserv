@@ -1,12 +1,13 @@
 import type { Metadata } from "next"
 import ResultsPage from "@/app/results/page"
 
-interface Props {
-  params: { id: string }
+type Props = {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const id = params.id
+  const { id } = await params
 
   // You could fetch token data here to use in the metadata
   // const token = await fetch(`https://api.odinscan.fun/token/${id}`).then(res => res.json())
@@ -35,7 +36,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 }
 
-export default function TokenPage({ params }: Props) {
+export default async function TokenPage({ params }: Props) {
+  const { id } = await params
   // This is a wrapper that passes the ID to the results page
-  return <ResultsPage searchParam={params.id} />
+  return <ResultsPage />
 }
