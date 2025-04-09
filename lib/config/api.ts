@@ -1,4 +1,5 @@
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://deape.ddns.net:3001';
+// Use proxy route to avoid mixed content issues
+export const API_BASE_URL = '/api/proxy?path=';
 
 export const API_ENDPOINTS = {
   // Token endpoints

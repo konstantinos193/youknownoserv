@@ -584,13 +584,19 @@ export default function ResultsPage() {
 
         setLoading(true);
         console.log('🔍 Starting data fetch for token:', search);
+
+        const headers = {
+          'Accept': 'application/json',
+          'Origin': 'https://odinscan.fun',
+          'Referer': 'https://odinscan.fun/'
+        };
         
-        // Fetch all required data in parallel
+        // Use the direct API endpoints with proper headers
         const [tokenResponse, holdersResponse, btcPriceResponse, holderGrowthResponse] = await Promise.all([
-          fetch(API_ENDPOINTS.token(search)),
-          fetch(`/api/token/${search}/holders-pnl`),  // Use the new endpoint
-          fetch('/api/btc-price'),
-          fetch(`/api/token-metrics/${search}/holder-growth`)
+          fetch(`${API_ENDPOINTS.token(search)}`, { headers }),
+          fetch(`${API_ENDPOINTS.tokenOwners(search)}`, { headers }),
+          fetch(API_ENDPOINTS.btcPrice, { headers }),
+          fetch(`${API_ENDPOINTS.tokenMetrics(search)}`, { headers })
         ]);
 
         if (!tokenResponse.ok) {
@@ -604,8 +610,8 @@ export default function ResultsPage() {
           holderGrowthResponse.ok ? holderGrowthResponse.json() : null
         ]);
 
-        // Fetch creator username
-        const creatorResponse = await fetch(`https://api.odin.fun/v1/user/${tokenData.creator}`);
+        // Fetch creator username with same headers
+        const creatorResponse = await fetch(`https://api.odin.fun/v1/user/${tokenData.creator}`, { headers });
         const creatorData = await creatorResponse.json();
         setCreatorUsername(creatorData.username || "Unknown");
 
@@ -618,7 +624,7 @@ export default function ResultsPage() {
         setBtcUsdPrice(btcPrice);
 
         // Calculate USD price
-        const priceInBtc = Number(tokenData.price) / 100000000; // Convert satoshis to BTC
+        const priceInBtc = Number(tokenData.price) / 100000000;
         const priceInUsd = priceInBtc * btcPrice;
         setPrice({
           btcPrice: priceInBtc,
@@ -629,12 +635,10 @@ export default function ResultsPage() {
           })
         });
 
-        // Use server-calculated volume metrics
         if (tokenData.volumeMetrics) {
           setVolumeMetrics(tokenData.volumeMetrics);
         }
 
-        // Set holder growth metrics
         if (holderGrowthData) {
           console.log('✅ Setting holder growth metrics:', holderGrowthData);
           setHolderAnalysis(holderGrowthData);
@@ -642,7 +646,6 @@ export default function ResultsPage() {
           console.warn('⚠️ No holder growth data available');
         }
 
-        // Set loading to false
         setLoading(false);
 
       } catch (error) {
@@ -660,12 +663,18 @@ export default function ResultsPage() {
       setIsLoadingTrades(true);
       setTradesError(null);
       
-      // Add a timeout to prevent hanging
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      const headers = {
+        'Accept': 'application/json',
+        'Origin': 'https://odinscan.fun',
+        'Referer': 'https://odinscan.fun/'
+      };
       
-      const response = await fetch(API_ENDPOINTS.tokenTrades(search), {
-        signal: controller.signal
+      const response = await fetch(`${API_ENDPOINTS.tokenTrades(search)}`, {
+        signal: controller.signal,
+        headers
       });
       
       clearTimeout(timeoutId);
@@ -675,7 +684,6 @@ export default function ResultsPage() {
       }
       
       const data = await response.json();
-      // Limit to last 100 trades initially
       setTrades(data.data.slice(-100));
     } catch (error) {
       if (error instanceof Error) {
