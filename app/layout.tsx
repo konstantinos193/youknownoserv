@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
+import { Analytics } from "@vercel/analytics/react"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -60,7 +61,6 @@ export const metadata: Metadata = {
   },
 
   // Discord metadata (uses Open Graph)
-  // Discord will use the Open Graph metadata for rich embeds
 
   // Verification for search engines (add your verification codes when available)
   verification: {
@@ -112,6 +112,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
           {children}
+          <Analytics />
         </ThemeProvider>
       </body>
     </html>
