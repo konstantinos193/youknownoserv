@@ -13,8 +13,8 @@ export interface Holder {
 interface HoldersResponse {
   [tokenId: string]: {
     holders: Holder[];
-    totalHolders?: number;
-    activeHolders?: number;
+    totalHolders: number;
+    activeHolders: number;
   };
 }
 
@@ -22,6 +22,8 @@ export const fetchTokenHolders = async (tokenId: string, creatorId: string): Pro
   try {
     // Convert tokenId to array and encode for URL
     const tokenIds = encodeURIComponent(JSON.stringify([tokenId]));
+    
+    console.log('Fetching holders for token:', tokenId);
     
     const response = await fetch(`/api/proxy?path=/api/batch-holders?tokenIds=${tokenIds}`, {
       headers: {
@@ -40,6 +42,12 @@ export const fetchTokenHolders = async (tokenId: string, creatorId: string): Pro
     // If we got an error response from the proxy
     if (data.error) {
       throw new Error(data.error);
+    }
+
+    // Log the number of holders received
+    if (data[tokenId]) {
+      console.log(`Received ${data[tokenId].holders.length} holders for token ${tokenId}`);
+      console.log(`Total holders: ${data[tokenId].totalHolders}, Active holders: ${data[tokenId].activeHolders}`);
     }
     
     return data;
