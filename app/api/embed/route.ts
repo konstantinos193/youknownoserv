@@ -1,6 +1,6 @@
 // Add this new file to handle server-side embed image generation
 import { type NextRequest, NextResponse } from "next/server"
-import { createCanvas, loadImage } from "canvas"
+import sharp from "sharp"
 
 // This would be a server-side API route that generates the embed image
 export async function GET(request: NextRequest) {
@@ -13,45 +13,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Token ID is required" }, { status: 400 })
     }
 
-    // In a real implementation, you would:
-    // 1. Fetch token data from your API
-    // 2. Generate an image using canvas or another library
-    // 3. Return the image as a response
+    // Create a simple SVG template
+    const svg = `
+      <svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg">
+        <rect width="100%" height="100%" fill="#000000"/>
+        <rect x="10" y="10" width="1180" height="610" fill="none" stroke="#0FF4C6" stroke-width="4"/>
+        <text x="280" y="100" font-family="Arial" font-size="48" font-weight="bold" fill="#F0E68C">ODINSCAN Analysis</text>
+        <text x="280" y="160" font-family="Arial" font-size="32" fill="#0FF4C6">Token ID: ${tokenId}</text>
+      </svg>
+    `
 
-    // Example of how you might generate an image (simplified)
-    const canvas = createCanvas(1200, 630)
-    const ctx = canvas.getContext("2d")
-
-    // Draw background
-    ctx.fillStyle = "#000000"
-    ctx.fillRect(0, 0, 1200, 630)
-
-    // Draw border
-    ctx.strokeStyle = "#0FF4C6"
-    ctx.lineWidth = 4
-    ctx.strokeRect(10, 10, 1180, 610)
-
-    // Add token image
-    try {
-      const tokenImage = await loadImage(`https://images.odin.fun/token/${tokenId}`)
-      ctx.drawImage(tokenImage, 50, 50, 200, 200)
-    } catch (e) {
-      // Use placeholder if image fails to load
-      ctx.fillStyle = "#333333"
-      ctx.fillRect(50, 50, 200, 200)
-    }
-
-    // Add text
-    ctx.fillStyle = "#F0E68C" // Yellow color
-    ctx.font = "bold 48px Arial"
-    ctx.fillText("ODINSCAN Analysis", 280, 100)
-
-    ctx.fillStyle = "#0FF4C6" // Cyan color
-    ctx.font = "32px Arial"
-    ctx.fillText(`Token ID: ${tokenId}`, 280, 160)
-
-    // Convert canvas to buffer
-    const buffer = canvas.toBuffer("image/png")
+    // Convert SVG to PNG using sharp
+    const buffer = await sharp(Buffer.from(svg))
+      .png()
+      .toBuffer()
 
     // Return the image
     return new NextResponse(buffer, {
