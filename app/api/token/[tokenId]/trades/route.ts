@@ -2,18 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-type RouteContext = {
-  params: {
-    tokenId: string;
-  };
-  searchParams: { [key: string]: string | string[] | undefined };
-};
-
 export async function GET(
   request: NextRequest,
-  { params }: RouteContext
+  context: { params: { tokenId: string } }
 ) {
-  const tokenId = params.tokenId;
+  const tokenId = context.params.tokenId;
   
   try {
     const response = await fetch(`${process.env.API_URL}/api/token/${tokenId}/trades`, {
