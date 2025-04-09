@@ -1,15 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(
-  request: NextRequest,
-  context: { params: { tokenId: string } }
-) {
-  const tokenId = context.params.tokenId;
-  
+export async function GET(_: Request, { params }: { params: { tokenId: string } }) {
   try {
-    const response = await fetch(`${process.env.API_URL}/api/token/${tokenId}`, {
+    const response = await fetch(`${process.env.API_URL}/api/token/${params.tokenId}`, {
       headers: {
         'Content-Type': 'application/json',
       },
