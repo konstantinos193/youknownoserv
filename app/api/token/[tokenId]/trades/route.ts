@@ -1,10 +1,12 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(
-  request: Request,
-  { params }: { params: { tokenId: string } }
+  request: NextRequest,
+  context: { params: { tokenId: string } }
 ) {
-  const tokenId = params.tokenId;
+  const tokenId = context.params.tokenId;
   
   try {
     const response = await fetch(`${process.env.API_URL}/api/token/${tokenId}/trades`, {
@@ -14,9 +16,14 @@ export async function GET(
       cache: 'no-store', // Disable caching
     });
 
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
     const data = await response.json();
     return NextResponse.json(data);
   } catch (error) {
+    console.error('Error fetching trades:', error);
     return NextResponse.json(
       { error: 'Failed to fetch trades data' },
       { status: 500 }
