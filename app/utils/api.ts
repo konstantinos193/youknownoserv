@@ -1,3 +1,5 @@
+import { API_ENDPOINTS } from "@/lib/config/api";
+
 // API endpoints
 export const API_BASE_URL = 'http://deape.ddns.net:3001';
 
@@ -21,9 +23,11 @@ export const fetchTokenHolders = async (tokenId: string, creatorId: string): Pro
     // Convert tokenId to array and encode for URL
     const tokenIds = encodeURIComponent(JSON.stringify([tokenId]));
     
-    const response = await fetch(`${API_BASE_URL}/api/batch-holders?tokenIds=${tokenIds}`, {
+    const response = await fetch(`/api/proxy?path=/api/batch-holders?tokenIds=${tokenIds}`, {
       headers: {
         'Accept': 'application/json',
+        'Origin': 'https://odinscan.fun',
+        'Referer': 'https://odinscan.fun/'
       }
     });
 
@@ -32,6 +36,12 @@ export const fetchTokenHolders = async (tokenId: string, creatorId: string): Pro
     }
 
     const data = await response.json();
+    
+    // If we got an error response from the proxy
+    if (data.error) {
+      throw new Error(data.error);
+    }
+    
     return data;
   } catch (error) {
     console.error('Error fetching holders:', error);

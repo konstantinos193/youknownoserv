@@ -11,7 +11,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Path parameter is required' }, { status: 400 });
     }
 
-    const response = await fetch(`${API_BASE}${path}`, {
+    // Get all search params except 'path'
+    const queryParams = new URLSearchParams();
+    searchParams.forEach((value, key) => {
+      if (key !== 'path') {
+        queryParams.append(key, value);
+      }
+    });
+
+    // Construct the full URL
+    const queryString = queryParams.toString();
+    const fullUrl = `${API_BASE}${path}${queryString ? (path.includes('?') ? '&' : '?') + queryString : ''}`;
+
+    console.log('Proxying request to:', fullUrl);
+
+    const response = await fetch(fullUrl, {
       headers: {
         'Accept': 'application/json',
         'Origin': 'https://odinscan.fun',
