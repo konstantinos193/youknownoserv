@@ -27,6 +27,14 @@ const nextConfig = {
     parallelServerBuildTraces: true,
     parallelServerCompiles: true,
   },
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: `${process.env.API_URL || 'http://deape.ddns.net:3001'}/api/:path*`,
+      },
+    ]
+  },
 }
 
 if (userConfig) {
