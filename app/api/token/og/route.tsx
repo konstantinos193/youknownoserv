@@ -1,13 +1,11 @@
-/** @jsxRuntime automatic */
-/** @jsxImportSource react */
 import { ImageResponse } from "next/og";
+import { NextRequest } from "next/server";
 
 export const runtime = "edge";
-export const contentType = "image/png";
 
-export async function GET(request) {
+export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
+    const { searchParams } = req.nextUrl;
     const title = searchParams.get("title") || "ODINSCAN";
     const description = searchParams.get("description") || "Odin.fun Token Analysis Tool";
 
@@ -15,34 +13,20 @@ export async function GET(request) {
       (
         <div
           style={{
-            height: "100%",
+            background: "black",
             width: "100%",
+            height: "100%",
             display: "flex",
-            flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: "black",
+            flexDirection: "column",
             padding: "40px",
           }}
         >
-          <h1
-            style={{
-              fontSize: "60px",
-              color: "#F0E68C",
-              margin: "0 0 20px 0",
-              textAlign: "center",
-            }}
-          >
+          <h1 style={{ color: "#F0E68C", fontSize: 60, margin: "0 0 20px 0" }}>
             {title}
           </h1>
-          <p
-            style={{
-              fontSize: "24px",
-              color: "#0FF4C6",
-              margin: "0",
-              textAlign: "center",
-            }}
-          >
+          <p style={{ color: "#0FF4C6", fontSize: 24, margin: 0 }}>
             {description}
           </p>
         </div>
@@ -53,6 +37,7 @@ export async function GET(request) {
       }
     );
   } catch (error) {
+    console.error("Error generating OG image:", error);
     return new Response("Failed to generate image", { status: 500 });
   }
 } 
