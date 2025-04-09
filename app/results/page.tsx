@@ -584,25 +584,35 @@ export default function ResultsPage() {
 
         setLoading(true);
         console.log('🔍 Starting data fetch for token:', search);
+
+        const headers = {
+          'Accept': 'application/json',
+          'Origin': 'https://odinscan.fun',
+          'Referer': 'https://odinscan.fun/'
+        };
         
         // Use the direct API endpoints with proper headers
-        const [tokenResponse, holdersResponse, btcPriceResponse, holderGrowthResponse] = await Promise.all([
-          fetch(`${API_ENDPOINTS.token(search)}`),
-          fetch(`${API_ENDPOINTS.tokenOwners(search)}`),
-          fetch(API_ENDPOINTS.btcPrice),
-          fetch(`${API_ENDPOINTS.tokenMetrics(search)}`)
+        const responses = await Promise.all([
+          fetch(`${API_ENDPOINTS.token(search)}`, { headers }),
+          fetch(`${API_ENDPOINTS.tokenOwners(search)}`, { headers }),
+          fetch(API_ENDPOINTS.btcPrice, { headers }),
+          fetch(`${API_ENDPOINTS.tokenMetrics(search)}`, { headers })
         ]);
+
+        const [tokenResponse, holdersResponse, btcPriceResponse, holderGrowthResponse] = responses;
 
         if (!tokenResponse.ok) {
           throw new Error(`Failed to fetch token data: ${tokenResponse.status}`);
         }
 
-        const [tokenData, holdersData, btcPriceData, holderGrowthData] = await Promise.all([
+        const results = await Promise.all([
           tokenResponse.json(),
           holdersResponse.ok ? holdersResponse.json() : { data: [] },
           btcPriceResponse.ok ? btcPriceResponse.json() : { USD: 0 },
           holderGrowthResponse.ok ? holderGrowthResponse.json() : null
         ]);
+
+        const [tokenData, holdersData, btcPriceData, holderGrowthData] = results;
 
         // Fetch creator username with same headers
         const creatorResponse = await fetch(`https://api.odin.fun/v1/user/${tokenData.creator}`, { headers });
