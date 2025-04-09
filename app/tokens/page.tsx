@@ -35,7 +35,7 @@ interface Token {
   twitter?: string
   telegram?: string
   creator_tokens_count?: number
-  holders?: any[]
+  holders?: Holder[]
 }
 
 interface RiskAssessment {
@@ -581,6 +581,16 @@ const FilteredTokensSkeleton = () => (
   </div>
 );
 
+// Add type for API response
+interface TokensApiResponse {
+  data: Token[];
+  pagination?: {
+    currentPage: number;
+    totalTokens: number;
+    hasMore: boolean;
+  };
+}
+
 export default function TokensPage() {
   const [tokens, setTokens] = useState<Token[]>([])
   const [sortBy, setSortBy] = useState<SortOption>("newest")
@@ -678,30 +688,32 @@ export default function TokensPage() {
     debouncedSearch(query);
   };
 
-  // Load tokens on component mount
+  // Update the loadTokens function
   useEffect(() => {
     const loadTokens = async () => {
       try {
         setLoading(true);
         
-        const response = await fetch('http://deape.ddns.net:3001/api/all-tokens', {
-          headers: {
-            'Accept': 'application/json',
-          }
-        });
+        const headers = {
+          'Accept': 'application/json',
+          'Origin': 'https://odinscan.fun',
+          'Referer': 'https://odinscan.fun/'
+        };
+
+        const response = await fetch(API_ENDPOINTS.allTokens, { headers });
 
         if (!response.ok) {
-          throw new Error('Failed to fetch tokens');
+          throw new Error(`Failed to fetch tokens: ${response.status}`);
         }
 
-        const result = await response.json();
+        const result = await response.json() as TokensApiResponse;
         
         if (result && Array.isArray(result.data)) {
           // Sort by newest first
           const allTokens = result.data
             .sort((a: Token, b: Token) => new Date(b.created_time).getTime() - new Date(a.created_time).getTime())
-            .map((token: any) => ({
-              id: token.id,
+            .map((token: Token): Token => ({
+              ...token,
               name: token.name || '',
               ticker: token.ticker || '',
               creator: token.creator || '',
@@ -709,7 +721,8 @@ export default function TokensPage() {
               price: Number(token.price || 0),
               marketcap: Number(token.marketcap) || 0,
               total_supply: token.total_supply || '0',
-              holder_count: token.holder_count || token.holders || 0,
+              holder_count: Array.isArray(token.holders) ? token.holders.length : 
+                            typeof token.holder_count === 'number' ? token.holder_count : 0,
               volume: Number(token.volume) || 0,
               creator_balance: token.creator_balance || '0',
               website: token.website || '',
@@ -722,15 +735,19 @@ export default function TokensPage() {
           setTokens(allTokens);
           setFilteredTokens(allTokens.slice(0, CHUNK_SIZE));
           setWindowSize(CHUNK_SIZE);
+        } else {
+          throw new Error('Invalid data format received from API');
         }
       } catch (error) {
         console.error('Error loading tokens:', error);
-        setError('Failed to load tokens. Please try again later.');
+        setError(error instanceof Error ? error.message : 'Failed to load tokens. Please try again later.');
       } finally {
         setLoading(false);
+        setInitialLoad(false);
       }
     };
 
+    // Initial load
     loadTokens();
 
     // Refresh tokens every 30 seconds
